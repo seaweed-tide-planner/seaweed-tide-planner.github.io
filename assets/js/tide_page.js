@@ -110,6 +110,8 @@ function cacheElements() {
 
   els.forecastRangeLabel = document.getElementById("forecastRangeLabel");
   els.overviewRangeLabel = document.getElementById("overviewRangeLabel");
+  els.overviewChartSubhead = document.querySelector(".overview-chart-subhead");
+  els.overviewChartFrame = document.querySelector(".overview-chart-frame");
   els.forecastRangeButtons = Array.from(document.querySelectorAll("[data-forecast-days]"));
   els.overviewRangeButtons = Array.from(document.querySelectorAll("[data-overview-months]"));
 }
@@ -987,6 +989,8 @@ function syncForecastRangeControls() {
 }
 
 function syncOverviewRangeControls() {
+  syncOverviewVisibility();
+
   if (els.overviewRangeLabel) {
     const suffix = isMobileView() ? "" : " & Harvest Windows";
     els.overviewRangeLabel.textContent = `${state.overviewMonths}-Month Tide Overview${suffix}`;
@@ -995,6 +999,14 @@ function syncOverviewRangeControls() {
   els.overviewRangeButtons.forEach((button) => {
     const isSelected = Number(button.dataset.overviewMonths) === state.overviewMonths;
     button.setAttribute("aria-pressed", String(isSelected));
+  });
+}
+
+function syncOverviewVisibility() {
+  const hideOverview = isMobileView();
+
+  [els.overviewChartSubhead, els.overviewHarvestWindows, els.overviewChartFrame].forEach((element) => {
+    if (element) element.hidden = hideOverview;
   });
 }
 
