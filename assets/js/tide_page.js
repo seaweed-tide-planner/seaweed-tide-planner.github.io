@@ -54,6 +54,16 @@ const SYMBOLS = {
   fullMoon: "\uD83C\uDF15",
   down: "\u25BC"
 };
+const MOON_PHASE_SYMBOLS = [
+  "\uD83C\uDF11",
+  "\uD83C\uDF12",
+  "\uD83C\uDF13",
+  "\uD83C\uDF14",
+  "\uD83C\uDF15",
+  "\uD83C\uDF16",
+  "\uD83C\uDF17",
+  "\uD83C\uDF18"
+];
 const TREND_SYMBOLS = {
   Slack: "\u2194",
   Flooding: "\u2197",
@@ -99,6 +109,7 @@ function cacheElements() {
     "harvestLowestLow",
     "harvestEndLabel",
     "harvestEndLow",
+    "moonPhaseSymbol",
     "moonPhase",
     "moonIllumination",
     "nextNewMoon",
@@ -476,11 +487,18 @@ function renderMoon(now) {
   const nextNew = nextMoonEvent(now, 0);
   const nextFull = nextMoonEvent(now, 0.5);
 
+  els.moonPhaseSymbol.textContent = moonPhaseSymbol(phase);
   els.moonPhase.textContent = moonPhaseName(phase);
   els.moonIllumination.textContent = `${formatPercent(moonIllumination(phase))} illuminated`;
   els.nextNewMoon.textContent = formatDateTime(nextNew, state.profile.timezone);
   els.nextFullMoon.textContent = formatDateTime(nextFull, state.profile.timezone);
   renderSolarTimes(now);
+}
+
+function moonPhaseSymbol(phase) {
+  const normalized = ((phase % 1) + 1) % 1;
+  const index = Math.round(normalized * MOON_PHASE_SYMBOLS.length) % MOON_PHASE_SYMBOLS.length;
+  return MOON_PHASE_SYMBOLS[index];
 }
 
 function renderSolarTimes(now) {

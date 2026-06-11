@@ -397,6 +397,14 @@ textarea {
   font-weight: 600;
 }
 
+.summary-moon-symbol {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 1.18rem;
+  line-height: 1;
+  vertical-align: -0.08em;
+}
+
 .harvest-detail-line {
   font-size: 0.78rem;
   line-height: 1.28;

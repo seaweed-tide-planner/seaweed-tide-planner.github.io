@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0f766e">
   <title>Seaweed Tide Planner</title>
-  <link rel="stylesheet" href="./assets/css/tides.css?v=20260611-safety-location-card">
+  <link rel="stylesheet" href="./assets/css/tides.css?v=20260611-summary-symbols">
 </head>
 <body>
   <header class="app-header">
@@ -66,11 +66,11 @@
 
       <article class="summary-card">
         <div class="card-label">&#127769; Moon and Sun</div>
-        <div class="summary-line"><strong>Moon:</strong> <span id="moonPhase">Loading</span> (<span id="moonIllumination">--</span>)</div>
+        <div class="summary-line"><strong>Moon:</strong> <span id="moonPhaseSymbol" class="summary-moon-symbol" aria-hidden="true">&#127769;</span><span id="moonPhase">Loading</span> (<span id="moonIllumination">--</span>)</div>
         <div class="summary-line"><strong>New moon:</strong> <span id="nextNewMoon">--</span></div>
         <div class="summary-line"><strong>Full moon:</strong> <span id="nextFullMoon">--</span></div>
-        <div class="summary-line"><strong>Sunrise:</strong> <span id="sunriseTime">--</span></div>
-        <div class="summary-line"><strong>Sunset:</strong> <span id="sunsetTime">--</span></div>
+        <div class="summary-line"><strong>&#127749; Sunrise:</strong> <span id="sunriseTime">--</span></div>
+        <div class="summary-line"><strong>&#127751; Sunset:</strong> <span id="sunsetTime">--</span></div>
       </article>
     </section>
 
@@ -172,6 +172,6 @@
   </noscript>
 
   <script type="module" src="./assets/js/disclaimer.js?v=20260611-disclaimer"></script>
-  <script type="module" src="./assets/js/tide_page.js?v=20260611-summary-sun"></script>
+  <script type="module" src="./assets/js/tide_page.js?v=20260611-summary-symbols"></script>
 </body>
 </html>
