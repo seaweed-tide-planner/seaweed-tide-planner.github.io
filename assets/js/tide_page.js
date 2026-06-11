@@ -54,6 +54,16 @@ const SYMBOLS = {
   fullMoon: "\uD83C\uDF15",
   down: "\u25BC"
 };
+const TREND_SYMBOLS = {
+  Slack: "\u2194",
+  Flooding: "\u2197",
+  Ebbing: "\u2198"
+};
+const SOLAR_ZENITH_DEG = 90.833;
+const PROFILE_REFERENCE_COORDINATES = {
+  kenya_mombasa_reference: { lat: -4.0435, lon: 39.6682 },
+  fremantle_reference: { lat: -32.0569, lon: 115.7439 }
+};
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -93,6 +103,8 @@ function cacheElements() {
     "moonIllumination",
     "nextNewMoon",
     "nextFullMoon",
+    "sunriseTime",
+    "sunsetTime",
     "tideChart7d",
     "tideChartOverview",
     "overviewHarvestWindows",
@@ -342,7 +354,7 @@ function renderTodayTides(forecast) {
 
   els.todayTidesDate.textContent = `(${formatDate(forecast.now, state.profile.timezone)})`;
   els.currentTideState.textContent =
-    `${trend} (${formatMetres(currentHeight)}) at ${formatTime(forecast.now, state.profile.timezone)} local time`;
+    `${tideTrendSymbol(trend)} ${trend} (${formatMetres(currentHeight)}) at ${formatTime(forecast.now, state.profile.timezone)} local time`;
   els.todayLowTides.textContent = lows.length ? lows.map(formatEventTimeHeight).join("   ") : "--";
   els.todayHighTides.textContent = highs.length ? highs.map(formatEventTimeHeight).join("   ") : "--";
 }
@@ -351,6 +363,10 @@ function tideTrendLabel(currentHeight, nextHeight) {
   const delta = nextHeight - currentHeight;
   if (!Number.isFinite(delta) || Math.abs(delta) < 0.005) return "Slack";
   return delta > 0 ? "Flooding" : "Ebbing";
+}
+
+function tideTrendSymbol(trend) {
+  return TREND_SYMBOLS[trend] || "";
 }
 
 function renderHarvestSummary(nextHarvest, forecast) {
@@ -464,6 +480,107 @@ function renderMoon(now) {
   els.moonIllumination.textContent = `${formatPercent(moonIllumination(phase))} illuminated`;
   els.nextNewMoon.textContent = formatDateTime(nextNew, state.profile.timezone);
   els.nextFullMoon.textContent = formatDateTime(nextFull, state.profile.timezone);
+  renderSolarTimes(now);
+}
+
+function renderSolarTimes(now) {
+  const coordinates = solarCoordinatesForSelection();
+
+  if (!coordinates) {
+    els.sunriseTime.textContent = "--";
+    els.sunsetTime.textContent = "--";
+    return;
+  }
+
+  const times = solarTimes(now, coordinates.lat, coordinates.lon, state.profile.timezone);
+  els.sunriseTime.textContent = times.sunrise ? formatTime(times.sunrise, state.profile.timezone) : "--";
+  els.sunsetTime.textContent = times.sunset ? formatTime(times.sunset, state.profile.timezone) : "--";
+}
+
+function solarCoordinatesForSelection() {
+  if (hasCoordinates(state.location?.gps)) return state.location.gps;
+
+  const reference = PROFILE_REFERENCE_COORDINATES[state.profile?.key];
+  if (hasCoordinates(reference)) return reference;
+
+  return null;
+}
+
+function hasCoordinates(coordinates) {
+  return (
+    coordinates &&
+    Number.isFinite(coordinates.lat) &&
+    Number.isFinite(coordinates.lon)
+  );
+}
+
+function solarTimes(date, latitude, longitude, timeZone) {
+  const dateKey = localDateKey(date, timeZone);
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const dayOfYear = Math.floor(
+    (Date.UTC(year, month - 1, day) - Date.UTC(year, 0, 0)) / 86400000
+  );
+
+  return {
+    sunrise: solarEventUtcDate(year, month, day, dayOfYear, latitude, longitude, true),
+    sunset: solarEventUtcDate(year, month, day, dayOfYear, latitude, longitude, false)
+  };
+}
+
+function solarEventUtcDate(year, month, day, dayOfYear, latitude, longitude, isSunrise) {
+  const longitudeHour = longitude / 15;
+  const approximateTime = dayOfYear + ((isSunrise ? 6 : 18) - longitudeHour) / 24;
+  const meanAnomaly = (0.9856 * approximateTime) - 3.289;
+  const trueLongitude = normalizeDegrees(
+    meanAnomaly +
+    (1.916 * degSin(meanAnomaly)) +
+    (0.020 * degSin(2 * meanAnomaly)) +
+    282.634
+  );
+
+  let rightAscension = normalizeDegrees(radToDeg(
+    Math.atan(0.91764 * Math.tan(degToRad(trueLongitude)))
+  ));
+  const longitudeQuadrant = Math.floor(trueLongitude / 90) * 90;
+  const ascensionQuadrant = Math.floor(rightAscension / 90) * 90;
+  rightAscension = (rightAscension + longitudeQuadrant - ascensionQuadrant) / 15;
+
+  const sinDeclination = 0.39782 * degSin(trueLongitude);
+  const cosDeclination = Math.cos(Math.asin(sinDeclination));
+  const cosHourAngle = (
+    degCos(SOLAR_ZENITH_DEG) -
+    (sinDeclination * degSin(latitude))
+  ) / (cosDeclination * degCos(latitude));
+
+  if (cosHourAngle > 1 || cosHourAngle < -1) return null;
+
+  const hourAngle = (isSunrise
+    ? 360 - radToDeg(Math.acos(cosHourAngle))
+    : radToDeg(Math.acos(cosHourAngle))) / 15;
+  const localMeanTime = hourAngle + rightAscension - (0.06571 * approximateTime) - 6.622;
+  const utcHours = localMeanTime - longitudeHour;
+
+  return new Date(Date.UTC(year, month - 1, day) + Math.round(utcHours * 3600000));
+}
+
+function degToRad(degrees) {
+  return degrees * Math.PI / 180;
+}
+
+function radToDeg(radians) {
+  return radians * 180 / Math.PI;
+}
+
+function degSin(degrees) {
+  return Math.sin(degToRad(degrees));
+}
+
+function degCos(degrees) {
+  return Math.cos(degToRad(degrees));
+}
+
+function normalizeDegrees(degrees) {
+  return ((degrees % 360) + 360) % 360;
 }
 
 function renderCharts(forecast) {

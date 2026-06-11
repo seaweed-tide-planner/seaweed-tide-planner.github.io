@@ -50,7 +50,7 @@
 
     <section class="summary-grid" aria-label="Tide summary">
       <article class="summary-card today-tides-card">
-        <div class="card-label">Todays Tides <span id="todayTidesDate"></span></div>
+        <div class="card-label">&#127754; Todays Tides <span id="todayTidesDate"></span></div>
         <div class="summary-line"><strong>Current:</strong> <span id="currentTideState">Loading</span></div>
         <div class="summary-line"><strong>Low Tide:</strong> <span id="todayLowTides">--</span></div>
         <div class="summary-line"><strong>High Tide:</strong> <span id="todayHighTides">--</span></div>
@@ -64,17 +64,13 @@
         <div class="summary-line harvest-detail-line"><strong id="harvestEndLabel">Low Tide:</strong> <span id="harvestEndLow">--</span></div>
       </article>
 
-      <article class="summary-card moon-summary-card">
-        <div class="moon-disc summary-moon-disc" aria-hidden="true"></div>
-        <div class="moon-summary-content">
-          <div class="card-label">Moon phase</div>
-          <div id="moonPhase" class="card-main">Loading</div>
-          <div id="moonIllumination" class="card-value">--</div>
-          <div class="moon-events">
-            <span>New: <strong id="nextNewMoon">--</strong></span>
-            <span>Full: <strong id="nextFullMoon">--</strong></span>
-          </div>
-        </div>
+      <article class="summary-card">
+        <div class="card-label">&#127769; Moon and Sun</div>
+        <div class="summary-line"><strong>Moon:</strong> <span id="moonPhase">Loading</span> (<span id="moonIllumination">--</span>)</div>
+        <div class="summary-line"><strong>New moon:</strong> <span id="nextNewMoon">--</span></div>
+        <div class="summary-line"><strong>Full moon:</strong> <span id="nextFullMoon">--</span></div>
+        <div class="summary-line"><strong>Sunrise:</strong> <span id="sunriseTime">--</span></div>
+        <div class="summary-line"><strong>Sunset:</strong> <span id="sunsetTime">--</span></div>
       </article>
     </section>
 
@@ -176,6 +172,6 @@
   </noscript>
 
   <script type="module" src="./assets/js/disclaimer.js?v=20260611-disclaimer"></script>
-  <script type="module" src="./assets/js/tide_page.js?v=20260611-safety-location-card"></script>
+  <script type="module" src="./assets/js/tide_page.js?v=20260611-summary-sun"></script>
 </body>
 </html>
