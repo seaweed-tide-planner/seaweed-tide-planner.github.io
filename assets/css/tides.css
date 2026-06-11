@@ -1807,6 +1807,10 @@ button:disabled {
     justify-content: flex-start;
   }
 
+  .desktop-admin-link {
+    display: none;
+  }
+
   .header-status,
   .location-card-status {
     justify-content: flex-start;
