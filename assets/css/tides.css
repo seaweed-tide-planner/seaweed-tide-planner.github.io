@@ -1484,6 +1484,16 @@ button:disabled {
   background: #fffaf0;
 }
 
+.info-panel.warning {
+  border: 2px solid #dc2626;
+  background: #fff7f7;
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.12), var(--shadow);
+}
+
+.info-panel.warning h2 {
+  color: #991b1b;
+}
+
 .empty-state,
 .noscript {
   border: 1px solid var(--border);
