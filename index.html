@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0f766e">
   <title>Seaweed Tide Planner</title>
-  <link rel="stylesheet" href="./assets/css/tides.css?v=20260611-location-reference">
+  <link rel="stylesheet" href="./assets/css/tides.css?v=20260611-safety-location-card">
 </head>
 <body>
   <header class="app-header">
@@ -153,7 +153,7 @@
 
     <section class="info-grid">
       <article class="panel info-panel">
-        <h2>Location and backend</h2>
+        <h2>Location and tide profile</h2>
         <div id="locationDetails" class="detail-stack"></div>
       </article>
 
@@ -165,19 +165,17 @@
       <article class="panel info-panel warning">
         <h2>Safety note</h2>
         <div id="safetyDetails" class="detail-stack"></div>
+        <button type="button" class="safety-disclaimer-button" data-disclaimer-open>Full marine disclaimer</button>
       </article>
     </section>
   </main>
 
-  <footer class="marine-disclaimer-footer">
-    <p><strong>Safety:</strong> Not for marine navigation or safety-of-life decisions. Tide guidance may be wrong, stale, unverified, or affected by local weather and sea conditions. Check official/local sources and current conditions before acting. <button type="button" data-disclaimer-open>Full disclaimer</button></p>
-  </footer>
 
   <noscript>
     <div class="noscript">JavaScript is required to calculate and display tide predictions.</div>
   </noscript>
 
   <script type="module" src="./assets/js/disclaimer.js?v=20260611-disclaimer"></script>
-  <script type="module" src="./assets/js/tide_page.js?v=20260611-location-reference"></script>
+  <script type="module" src="./assets/js/tide_page.js?v=20260611-safety-location-card"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 import { APP_CONFIG } from "./config.js?v=20260611-public-reads";
-import { getDataStatus, getLocations, getProfiles, loadPublicFarmLocations } from "./tide_data.js?v=20260611-public-reads";
+import { getLocations, getProfiles, loadPublicFarmLocations } from "./tide_data.js?v=20260611-public-reads";
 import {
   findNextHarvestLow,
   moonEvents,
@@ -286,7 +286,6 @@ function renderClock() {
 
 function renderLocationSummary() {
   const { location, profile } = state;
-  const dataStatus = getDataStatus();
   els.locationMeta.textContent = `${location.region}, ${location.country}`;
   els.locationReferenceStation.textContent = `Reference station: ${referenceStationLabel(profile)}`;
   els.verificationBadge.textContent = statusLabel(profile.verificationStatus);
@@ -300,10 +299,7 @@ function renderLocationSummary() {
   els.locationDetails.innerHTML = `
     <span><strong>Location:</strong> ${escapeHtml(location.name)}</span>
     <span><strong>GPS:</strong> ${escapeHtml(gps || "To be confirmed")}</span>
-    <span><strong>Profile:</strong> ${escapeHtml(profile.name)}</span>
-    <span><strong>Backend:</strong> ${escapeHtml(dataStatus.backendContext)}</span>
-    <span><strong>Supabase ref:</strong> ${escapeHtml(dataStatus.supabaseProjectRef)}</span>
-    <span><strong>Data mode:</strong> ${escapeHtml(dataStatus.mode)}</span>
+    <span><strong>Tide profile:</strong> ${escapeHtml(profile.name)}</span>
   `;
 
 }
@@ -925,7 +921,7 @@ function renderSourceDetails() {
   const { profile, location } = state;
   els.sourceDetails.innerHTML = `
     <div><strong>Source:</strong> <a href="${escapeAttribute(profile.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(profile.sourceName)}</a></div>
-    <div><strong>Profile:</strong> ${escapeHtml(profile.name)}</div>
+    <div><strong>Tide profile:</strong> ${escapeHtml(profile.name)}</div>
     <div><strong>Datum:</strong> ${escapeHtml(profile.datumLabel)}</div>
     <div><strong>Timezone:</strong> ${escapeHtml(profile.timezone)}</div>
     <div><strong>Verification:</strong> ${escapeHtml(profile.verificationLabel)}</div>
