@@ -1,5 +1,5 @@
 import { APP_CONFIG } from "./config.js?v=20260612-location-identifiers";
-import { getLocale, t } from "./language.js?v=20260615-dataset-import-action";
+import { getLocale, t } from "./language.js?v=20260615-threshold-incomplete";
 
 const SOURCE_KEY = "kmd_cap";
 const KMD_WARNINGS_URL = "https://meteo.go.ke/weather-warnings/";

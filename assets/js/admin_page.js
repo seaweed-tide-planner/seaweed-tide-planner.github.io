@@ -507,7 +507,7 @@ function renderDashboardMetrics() {
     return status && !["active", "verified"].includes(status);
   });
   const notCalibrated = farms.filter((location) => {
-    return calibrationStatusForLocation(location).value === "none";
+    return calibrationStatusForLocation(location).value !== "complete";
   });
   const expiringDatasets = tideSources.filter((dataset) => {
     return datasetExpiresWithinMonths(dataset, 3);
@@ -1864,6 +1864,7 @@ function calibrationStatusForValue(statusValue) {
   const status = String(statusValue || "none").toLowerCase();
 
   if (status === "complete") return { value: "complete", label: "Complete" };
+  if (status === "incomplete") return { value: "incomplete", label: "Incomplete" };
   if (status === "under_review") return { value: "under_review", label: "Under Review" };
   if (status === "retired") return { value: "none", label: "None" };
   return { value: "none", label: "None" };

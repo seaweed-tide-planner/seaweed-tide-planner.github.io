@@ -390,6 +390,7 @@ function setStatus(message, type = "") {
 function calibrationStatus(statusValue) {
   const value = String(statusValue || "none").toLowerCase();
   if (value === "complete") return { value, label: "Complete" };
+  if (value === "incomplete") return { value, label: "Incomplete" };
   if (value === "under_review") return { value, label: "Under Review" };
   return { value: "none", label: "None" };
 }

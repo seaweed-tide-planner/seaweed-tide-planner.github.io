@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260615-dataset-import-action";
+const CACHE_VERSION = "20260615-threshold-incomplete";
 const SHELL_CACHE = `seaweed-tide-planner-shell-${CACHE_VERSION}`;
 const DATA_CACHE = "seaweed-tide-planner-data-v1";
 const MAP_TILE_CACHE = "seaweed-tide-planner-map-tiles-v1";

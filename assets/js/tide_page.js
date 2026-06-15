@@ -6,7 +6,7 @@ import {
   loadPublicFarmLocations,
   loadPublicTideDatasetBundle,
   loadPublicTideReferences
-} from "./tide_data.js?v=20260615-dataset-import-action";
+} from "./tide_data.js?v=20260615-threshold-incomplete";
 import {
   getFarmLocationOfflineBundle,
   isOfflineStorageSupported,
@@ -41,13 +41,13 @@ import {
   startOfMonthKey,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260615-dataset-import-action";
+import { renderTideChart } from "./tide_charts.js?v=20260615-threshold-incomplete";
 import {
   getLocale,
   t,
   translateDataText,
   translateStatusLabel
-} from "./language.js?v=20260615-dataset-import-action";
+} from "./language.js?v=20260615-threshold-incomplete";
 
 const state = {
   location: null,
@@ -741,7 +741,7 @@ function renderLocationSummary() {
 }
 
 function mapUrl(location) {
-  return `./map.html?v=20260615-dataset-import-action&location=${encodeURIComponent(location.key)}`;
+  return `./map.html?v=20260615-threshold-incomplete&location=${encodeURIComponent(location.key)}`;
 }
 
 function referenceStationLabel(profile) {

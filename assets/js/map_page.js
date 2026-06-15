@@ -1,11 +1,11 @@
-import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260615-dataset-import-action";
-import { t, translateDataText } from "./language.js?v=20260615-dataset-import-action";
+import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260615-threshold-incomplete";
+import { t, translateDataText } from "./language.js?v=20260615-threshold-incomplete";
 import {
   isOfflineStorageSupported,
   listFarmLocationOfflineBundles
 } from "./offline_store.js?v=20260611-pwa-foundation";
 
-const TIDE_PAGE_VERSION = "20260615-dataset-import-action";
+const TIDE_PAGE_VERSION = "20260615-threshold-incomplete";
 
 const KENYA_COAST_VIEW = {
   center: [-4.45, 39.45],

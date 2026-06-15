@@ -2992,6 +2992,12 @@ main.admin-layout + .marine-disclaimer-footer {
   color: #15803d;
 }
 
+.calibration-status-pill[data-status="incomplete"] {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.1);
+  color: #a16207;
+}
+
 .calibration-status-pill[data-status="under_review"] {
   border-color: rgba(245, 158, 11, 0.34);
   background: rgba(245, 158, 11, 0.12);
