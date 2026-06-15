@@ -1701,7 +1701,7 @@ body:not(.admin-signed-in) [data-admin-only] {
 .locations-management-table th,
 .locations-management-table td {
   padding-block: 4px;
-  padding-inline: 4px;
+  padding-inline: 6px;
 }
 
 .locations-management-table td {
@@ -1724,27 +1724,27 @@ body:not(.admin-signed-in) [data-admin-only] {
 
 .locations-management-table th:nth-child(1),
 .locations-management-table td:nth-child(1) {
-  width: 86px;
+  width: 76px;
 }
 
 .locations-management-table th:nth-child(2),
 .locations-management-table td:nth-child(2) {
-  width: 210px;
+  width: 230px;
 }
 
 .locations-management-table th:nth-child(3),
 .locations-management-table td:nth-child(3) {
-  width: 132px;
+  width: 250px;
 }
 
 .locations-management-table th:nth-child(4),
 .locations-management-table td:nth-child(4) {
-  width: 108px;
+  width: 132px;
 }
 
 .locations-management-table th:nth-child(5),
 .locations-management-table td:nth-child(5) {
-  width: 90px;
+  width: 108px;
 }
 
 .locations-management-table th:nth-child(6),
@@ -1754,17 +1754,22 @@ body:not(.admin-signed-in) [data-admin-only] {
 
 .locations-management-table th:nth-child(7),
 .locations-management-table td:nth-child(7) {
-  width: 102px;
+  width: 90px;
 }
 
 .locations-management-table th:nth-child(8),
 .locations-management-table td:nth-child(8) {
+  width: 102px;
+}
+
+.locations-management-table th:nth-child(9),
+.locations-management-table td:nth-child(9) {
   width: 66px;
 }
 
 .locations-management-table[data-view="calibration"] th:nth-child(3),
 .locations-management-table[data-view="calibration"] td:nth-child(3) {
-  width: 220px;
+  width: 250px;
 }
 
 .locations-management-table[data-view="calibration"] th:nth-child(4),

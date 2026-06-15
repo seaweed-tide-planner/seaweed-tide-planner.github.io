@@ -16,6 +16,7 @@ const LOCATION_TABLE_VIEWS = {
   metadata: [
     "Location ID",
     "Name",
+    "Associated tide dataset",
     "Short name",
     "Region",
     "Latitude",
@@ -492,12 +493,18 @@ function renderLocationRow(row, index) {
 
 function renderLocationMetadataRow(row, index, rowId, rowClass, isEditing) {
   const isNew = !row.id;
+  const datasetOptions = [
+    ["", "Not linked"],
+    ...state.datasets.map((dataset) => [dataset.id, dataset.dataset_name])
+  ];
+  const selectedDatasetId = row.default_tide_dataset_id || datasetIdForKey(row.default_tide_dataset_key);
 
   if (!isEditing) {
     return `
       <tr data-row-id="${escapeAttribute(rowId)}" data-row-kind="location" class="${rowClass}">
         <td class="id-cell">${locationIdCell(row, index)}</td>
         <td>${readOnlyCell(row.farm_name)}</td>
+        <td>${readOnlyCell(datasetLabel(row.default_tide_dataset_id || row.default_tide_dataset_key))}</td>
         <td>${readOnlyCell(row.short_name)}</td>
         <td>${readOnlyCell(row.region)}</td>
         <td>${readOnlyCell(formatCoordinate(row.latitude))}</td>
@@ -516,6 +523,7 @@ function renderLocationMetadataRow(row, index, rowId, rowClass, isEditing) {
     <tr data-row-id="${escapeAttribute(rowId)}" data-row-kind="location" class="${rowClass}">
       <td class="id-cell">${locationIdCell(row, index)}</td>
       <td>${textInput("farm_name", row.farm_name, "name")}</td>
+      <td>${selectInput("default_tide_dataset_id", selectedDatasetId, datasetOptions)}</td>
       <td>${textInput("short_name", row.short_name, "short name")}</td>
       <td>${textInput("region", row.region, "region")}</td>
       <td>${numberInput("latitude", row.latitude, "latitude", "-90", "90", "0.000001")}</td>
