@@ -324,9 +324,42 @@ h3 {
   box-shadow: 0 3px 10px rgba(120, 75, 8, 0.06);
 }
 
+.weather-warning-strip[data-weather-alert-status="clear"] {
+  border-color: rgba(15, 118, 110, 0.28);
+  border-left-color: var(--accent);
+  background: #effaf7;
+  color: #17473f;
+  box-shadow: 0 3px 10px rgba(15, 118, 110, 0.06);
+}
+
+.weather-warning-strip[data-weather-alert-status="active"] {
+  border-color: rgba(239, 68, 68, 0.32);
+  border-left-color: var(--danger);
+  background: #fff7ed;
+  color: #6f2f0b;
+}
+
+.weather-warning-strip[data-weather-alert-status="error"],
+.weather-warning-strip[data-weather-alert-status="unknown"],
+.weather-warning-strip[data-weather-alert-status="loading"] {
+  border-color: rgba(245, 158, 11, 0.42);
+  border-left-color: var(--warn);
+  background: #fffbeb;
+}
+
 .weather-warning-strip strong {
   color: #92400e;
   font-weight: 700;
+}
+
+.weather-warning-strip[data-weather-alert-status="clear"] strong,
+.weather-warning-strip[data-weather-alert-status="clear"] a {
+  color: var(--accent);
+}
+
+.weather-warning-strip[data-weather-alert-status="active"] strong,
+.weather-warning-strip[data-weather-alert-status="active"] a {
+  color: #991b1b;
 }
 
 .weather-warning-strip a {
@@ -334,6 +367,15 @@ h3 {
   color: #92400e;
   font-weight: 700;
   text-align: right;
+}
+
+.weather-warning-text {
+  min-width: min(420px, 100%);
+}
+
+.weather-warning-meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
 }
 
 .weather-warning-icon {
@@ -348,6 +390,18 @@ h3 {
   color: #92400e;
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.weather-warning-strip[data-weather-alert-status="clear"] .weather-warning-icon {
+  border-color: rgba(15, 118, 110, 0.26);
+  background: #ecfdf5;
+  color: var(--accent);
+}
+
+.weather-warning-strip[data-weather-alert-status="active"] .weather-warning-icon {
+  border-color: rgba(153, 27, 27, 0.26);
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .location-card {
@@ -1281,7 +1335,7 @@ main.importer-shell + .marine-disclaimer-footer {
 }
 
 .admin-shell {
-  width: min(1720px, calc(100% - 76px));
+  width: min(1880px, calc(100% - 32px));
 }
 
 .importer-shell {
@@ -1624,7 +1678,8 @@ main.importer-shell + .marine-disclaimer-footer {
 }
 
 .locations-management-table {
-  min-width: 2040px;
+  min-width: 0;
+  table-layout: fixed;
 }
 
 .admin-data-table th {
@@ -1648,7 +1703,68 @@ body:not(.admin-signed-in) [data-admin-only] {
 }
 
 .locations-management-table td {
-  min-width: 104px;
+  min-width: 0;
+}
+
+.locations-management-table .id-cell {
+  min-width: 0;
+  max-width: none;
+}
+
+.locations-management-table .readonly-value,
+.locations-management-table .readonly-muted {
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.locations-management-table th:nth-child(1),
+.locations-management-table td:nth-child(1) {
+  width: 105px;
+}
+
+.locations-management-table th:nth-child(2),
+.locations-management-table td:nth-child(2) {
+  width: 190px;
+}
+
+.locations-management-table th:nth-child(3),
+.locations-management-table td:nth-child(3) {
+  width: 125px;
+}
+
+.locations-management-table th:nth-child(4),
+.locations-management-table td:nth-child(4) {
+  width: 105px;
+}
+
+.locations-management-table th:nth-child(5),
+.locations-management-table td:nth-child(5),
+.locations-management-table th:nth-child(6),
+.locations-management-table td:nth-child(6) {
+  width: 94px;
+}
+
+.locations-management-table th:nth-child(7),
+.locations-management-table td:nth-child(7) {
+  width: 230px;
+}
+
+.locations-management-table th:nth-child(8),
+.locations-management-table td:nth-child(8) {
+  width: 112px;
+}
+
+.locations-management-table th:nth-child(9),
+.locations-management-table td:nth-child(9) {
+  width: 92px;
+}
+
+.locations-management-table th:nth-child(10),
+.locations-management-table td:nth-child(10) {
+  width: 178px;
 }
 
 .admin-data-table input,
@@ -1749,7 +1865,7 @@ body:not(.admin-signed-in) [data-admin-only] {
 }
 
 .locations-management-table .save-cell {
-  min-width: 230px;
+  min-width: 0;
 }
 
 .save-cell button {
@@ -1763,6 +1879,14 @@ body:not(.admin-signed-in) [data-admin-only] {
 .locations-management-table .row-action-stack {
   align-items: center;
   flex-wrap: nowrap;
+  gap: 5px;
+}
+
+.locations-management-table .row-action-stack button,
+.locations-management-table .row-action-link {
+  padding-inline: 8px;
+  font-size: 0.73rem;
+  white-space: nowrap;
 }
 
 .locations-management-table .row-action-link {
@@ -2408,7 +2532,7 @@ button:disabled {
 .admin-console-page .app-shell,
 .admin-console-page .marine-disclaimer-footer,
 main.admin-layout + .marine-disclaimer-footer {
-  width: min(1720px, calc(100% - 76px));
+  width: min(1880px, calc(100% - 32px));
 }
 
 .admin-header-controls.compact {
@@ -2417,8 +2541,8 @@ main.admin-layout + .marine-disclaimer-footer {
 
 .admin-layout {
   display: grid;
-  grid-template-columns: 245px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 205px minmax(0, 1fr);
+  gap: 12px;
   align-items: start;
 }
 

@@ -8,7 +8,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icons/tide-planner-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./assets/vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-admin-public-observations">
+  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-kmd-weather-alerts">
 </head>
 <body>
   <header class="app-header">
@@ -19,8 +19,8 @@
       </div>
       <div class="header-actions">
         <nav class="app-nav" aria-label="Main navigation" data-i18n-aria-label="nav.mainLabel">
-          <a href="./index.html?v=20260615-admin-public-observations" data-i18n="nav.tides">Tides</a>
-          <a href="./map.html?v=20260615-admin-public-observations" aria-current="page" data-i18n="nav.map">Map</a>
+          <a href="./index.html?v=20260615-kmd-weather-alerts" data-i18n="nav.tides">Tides</a>
+          <a href="./map.html?v=20260615-kmd-weather-alerts" aria-current="page" data-i18n="nav.map">Map</a>
         </nav>
         <div class="header-status">
           <span id="mapStatus" class="status-pill status-muted" data-i18n="map.statusLoading">Loading locations</span>
@@ -38,11 +38,12 @@
       </div>
     </section>
 
-    <section class="weather-warning-strip" aria-label="Weather warning source" data-i18n-aria-label="weatherWarning.ariaLabel">
+    <section id="weatherAlertCard" class="weather-warning-strip" aria-label="Weather warning source" data-i18n-aria-label="weatherWarning.ariaLabel" data-weather-alert-status="loading">
       <span class="weather-warning-icon" aria-hidden="true">!</span>
-      <strong data-i18n="weatherWarning.label">Weather check:</strong>
-      <span data-i18n="weatherWarning.text">Heavy rain, strong wind, large waves, or unusual pressure can make tide guidance less reliable and unsafe for field work.</span>
-      <a href="https://meteo.go.ke/weather-warnings/" target="_blank" rel="noopener" data-i18n="weatherWarning.sourceLink">Check Kenya Meteorological Department warnings</a>
+      <strong id="weatherAlertLabel" data-i18n="weatherWarning.loadingLabel">Weather alerts:</strong>
+      <span id="weatherAlertText" class="weather-warning-text" data-i18n="weatherWarning.loadingText">Checking Kenya Meteorological Department alerts...</span>
+      <span id="weatherAlertMeta" class="weather-warning-meta" hidden></span>
+      <a id="weatherAlertSource" href="https://meteo.go.ke/weather-warnings/" target="_blank" rel="noopener" data-i18n="weatherWarning.sourceLink">Check Kenya Meteorological Department warnings</a>
     </section>
 
     <section class="map-intro-card">
@@ -104,9 +105,10 @@
   </noscript>
 
   <script src="./assets/vendor/leaflet/leaflet.js"></script>
-  <script type="module" src="./assets/js/disclaimer.js?v=20260615-admin-public-observations"></script>
-  <script type="module" src="./assets/js/language.js?v=20260615-admin-public-observations"></script>
-  <script type="module" src="./assets/js/pwa.js?v=20260615-admin-public-observations"></script>
-  <script type="module" src="./assets/js/map_page.js?v=20260615-admin-public-observations"></script>
+  <script type="module" src="./assets/js/disclaimer.js?v=20260615-kmd-weather-alerts"></script>
+  <script type="module" src="./assets/js/language.js?v=20260615-kmd-weather-alerts"></script>
+  <script type="module" src="./assets/js/weather_alerts.js?v=20260615-kmd-weather-alerts"></script>
+  <script type="module" src="./assets/js/pwa.js?v=20260615-kmd-weather-alerts"></script>
+  <script type="module" src="./assets/js/map_page.js?v=20260615-kmd-weather-alerts"></script>
 </body>
 </html>

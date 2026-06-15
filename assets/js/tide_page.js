@@ -6,7 +6,7 @@ import {
   loadPublicFarmLocations,
   loadPublicTideDatasetBundle,
   loadPublicTideReferences
-} from "./tide_data.js?v=20260615-admin-public-observations";
+} from "./tide_data.js?v=20260615-kmd-weather-alerts";
 import {
   getFarmLocationOfflineBundle,
   isOfflineStorageSupported,
@@ -41,13 +41,13 @@ import {
   startOfMonthKey,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260615-admin-public-observations";
+import { renderTideChart } from "./tide_charts.js?v=20260615-kmd-weather-alerts";
 import {
   getLocale,
   t,
   translateDataText,
   translateStatusLabel
-} from "./language.js?v=20260615-admin-public-observations";
+} from "./language.js?v=20260615-kmd-weather-alerts";
 
 const state = {
   location: null,
@@ -741,7 +741,7 @@ function renderLocationSummary() {
 }
 
 function mapUrl(location) {
-  return `./map.html?v=20260615-admin-public-observations&location=${encodeURIComponent(location.key)}`;
+  return `./map.html?v=20260615-kmd-weather-alerts&location=${encodeURIComponent(location.key)}`;
 }
 
 function referenceStationLabel(profile) {

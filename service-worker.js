@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260615-admin-public-observations";
+const CACHE_VERSION = "20260615-kmd-weather-alerts";
 const SHELL_CACHE = `seaweed-tide-planner-shell-${CACHE_VERSION}`;
 const DATA_CACHE = "seaweed-tide-planner-data-v1";
 const MAP_TILE_CACHE = "seaweed-tide-planner-map-tiles-v1";
@@ -44,6 +44,7 @@ const SHELL_ASSETS = [
   "./assets/js/tide_data.js",
   "./assets/js/tide_format.js",
   "./assets/js/tide_page.js",
+  "./assets/js/weather_alerts.js",
   "./06_Location_Observations/2026-06-15_local_tide_observation_paper_form.pdf"
 ];
 
@@ -120,7 +121,8 @@ function shouldBypassCache(url) {
     "observation_form.js",
     "tide_data.js",
     "tide_page.js",
-    "tides.css"
+    "tides.css",
+    "weather_alerts.js"
   ].includes(path);
 }
 
