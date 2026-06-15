@@ -7,7 +7,7 @@ import {
   localDateKey,
   startOfMonthKey
 } from "./tide_format.js";
-import { getLocale, t } from "./language.js?v=20260615-table-fill";
+import { getLocale, t } from "./language.js?v=20260615-dataset-import-action";
 
 const COLORS = {
   line: "#3b82f6",

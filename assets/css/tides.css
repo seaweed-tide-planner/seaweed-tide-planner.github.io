@@ -1831,57 +1831,57 @@ body:not(.admin-signed-in) [data-admin-only] {
 
 .tide-datasets-management-table th:nth-child(1),
 .tide-datasets-management-table td:nth-child(1) {
-  width: 7.5%;
+  width: 7%;
 }
 
 .tide-datasets-management-table th:nth-child(2),
 .tide-datasets-management-table td:nth-child(2) {
-  width: 19%;
+  width: 22.5%;
 }
 
 .tide-datasets-management-table th:nth-child(3),
 .tide-datasets-management-table td:nth-child(3) {
-  width: 13%;
+  width: 14%;
 }
 
 .tide-datasets-management-table th:nth-child(4),
 .tide-datasets-management-table td:nth-child(4) {
-  width: 9%;
+  width: 7%;
 }
 
 .tide-datasets-management-table th:nth-child(5),
 .tide-datasets-management-table td:nth-child(5) {
-  width: 12%;
+  width: 13%;
 }
 
 .tide-datasets-management-table th:nth-child(6),
 .tide-datasets-management-table td:nth-child(6) {
-  width: 22%;
+  width: 19%;
 }
 
 .tide-datasets-management-table th:nth-child(7),
 .tide-datasets-management-table td:nth-child(7) {
-  width: 9.5%;
+  width: 9%;
 }
 
 .tide-datasets-management-table th:nth-child(8),
 .tide-datasets-management-table td:nth-child(8) {
-  width: 4.5%;
+  width: 5%;
 }
 
 .tide-datasets-management-table th:nth-child(9),
 .tide-datasets-management-table td:nth-child(9) {
-  width: 4%;
+  width: 3.5%;
 }
 
 .tide-datasets-management-table[data-view="importer"] th:nth-child(3),
 .tide-datasets-management-table[data-view="importer"] td:nth-child(3) {
-  width: 13%;
+  width: 12%;
 }
 
 .tide-datasets-management-table[data-view="importer"] th:nth-child(4),
 .tide-datasets-management-table[data-view="importer"] td:nth-child(4) {
-  width: 16%;
+  width: 15%;
 }
 
 .tide-datasets-management-table[data-view="importer"] th:nth-child(5),
@@ -1890,17 +1890,22 @@ body:not(.admin-signed-in) [data-admin-only] {
 .tide-datasets-management-table[data-view="importer"] td:nth-child(6),
 .tide-datasets-management-table[data-view="importer"] th:nth-child(7),
 .tide-datasets-management-table[data-view="importer"] td:nth-child(7) {
-  width: 9%;
+  width: 8%;
 }
 
 .tide-datasets-management-table[data-view="importer"] th:nth-child(6),
 .tide-datasets-management-table[data-view="importer"] td:nth-child(6) {
-  width: 8%;
+  width: 7%;
 }
 
 .tide-datasets-management-table[data-view="importer"] th:nth-child(8),
 .tide-datasets-management-table[data-view="importer"] td:nth-child(8) {
-  width: 18.5%;
+  width: 14.5%;
+}
+
+.tide-datasets-management-table[data-view="importer"] th:nth-child(9),
+.tide-datasets-management-table[data-view="importer"] td:nth-child(9) {
+  width: 6%;
 }
 
 .admin-data-table input,

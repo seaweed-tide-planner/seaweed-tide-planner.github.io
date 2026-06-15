@@ -60,7 +60,8 @@ const DATASET_TABLE_VIEWS = {
     "Hourly rows",
     "Event rows",
     "# Linked farms",
-    "Linked data"
+    "Linked data",
+    "Action"
   ]
 };
 
@@ -939,6 +940,9 @@ function renderDatasetImporterRow(row, index, rowId, rowClass) {
       <td>${readOnlyCell(formatInteger(row.event_row_count))}</td>
       <td>${readOnlyCell(formatInteger(row.linked_farm_count))}</td>
       <td>${readOnlyCell(rawDataStatusLabel(row.raw_data_status))}</td>
+      <td class="save-cell">
+        <button type="button" data-select-import-dataset="${escapeAttribute(row.id || "")}" ${row.id && state.authSession ? "" : "disabled"}>Import</button>
+      </td>
     </tr>
   `;
 }
