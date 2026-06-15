@@ -2,10 +2,13 @@ import { APP_CONFIG } from "./config.js";
 
 const TABLES = {
   locations: "farm_locations",
-  datasets: "tide_datasets"
+  datasets: "tide_datasets",
+  adminUsers: "tide_admin_users",
+  calibrationSummary: "location_tide_calibration_admin_summary"
 };
 
 const AUTH_SESSION_KEY = "seaweed_tide_planner:admin_auth_session";
+const LANGUAGE_SETTINGS_KEY = "seaweed_tide_planner:admin_language_status";
 const NEW_LOCATION_ID = "__new_location__";
 const NEW_DATASET_ID = "__new_dataset__";
 
@@ -20,6 +23,8 @@ const DATASET_STATUSES = [
 const state = {
   locations: [],
   datasets: [],
+  calibrations: [],
+  adminUsers: [],
   authSession: null,
   hasLocationDraft: false,
   hasDatasetDraft: false,
@@ -48,11 +53,20 @@ function cacheElements() {
   [
     "adminConnectionStatus",
     "adminAuthStatus",
+    "adminLoginModal",
     "adminAuthForm",
     "adminEmail",
     "adminPassword",
     "adminSignIn",
     "adminSignOut",
+    "reloadAdminDashboard",
+    "metricFarmCount",
+    "metricTideSourceCount",
+    "metricUnverifiedSources",
+    "metricHiddenFarms",
+    "metricNotVerifiedFarms",
+    "metricNotCalibrated",
+    "metricExpiringDatasets",
     "locationCount",
     "datasetCount",
     "locationSaveStatus",
@@ -62,7 +76,12 @@ function cacheElements() {
     "reloadLocations",
     "reloadDatasets",
     "newLocation",
-    "newDataset"
+    "newDataset",
+    "adminUserCount",
+    "adminUsersStatus",
+    "adminUsersTableBody",
+    "reloadAdminUsers",
+    "languageSettingsStatus"
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -78,10 +97,16 @@ function bindEvents() {
     await signOut();
   });
 
-  els.reloadLocations.addEventListener("click", () => loadLocations());
-  els.reloadDatasets.addEventListener("click", () => loadDatasets());
+  els.reloadLocations?.addEventListener("click", () => loadLocations());
+  els.reloadDatasets?.addEventListener("click", () => loadDatasets());
+  els.reloadAdminUsers?.addEventListener("click", () => loadAdminUsers());
+  els.reloadAdminDashboard?.addEventListener("click", () => loadAll());
 
-  els.newLocation.addEventListener("click", () => {
+  document.querySelectorAll("[data-language-status]").forEach((select) => {
+    select.addEventListener("change", saveLanguageSettings);
+  });
+
+  els.newLocation?.addEventListener("click", () => {
     if (!state.authSession) {
       setStatus(els.locationSaveStatus, "Sign in before adding a location.", "error");
       return;
@@ -92,7 +117,7 @@ function bindEvents() {
     setStatus(els.locationSaveStatus, "New location row added. Click Create when ready.");
   });
 
-  els.newDataset.addEventListener("click", () => {
+  els.newDataset?.addEventListener("click", () => {
     if (!state.authSession) {
       setStatus(els.datasetSaveStatus, "Sign in before adding a dataset.", "error");
       return;
@@ -103,7 +128,7 @@ function bindEvents() {
     setStatus(els.datasetSaveStatus, "New dataset row added. Click Create when ready.");
   });
 
-  els.locationsTableBody.addEventListener("click", async (event) => {
+  els.locationsTableBody?.addEventListener("click", async (event) => {
     const editButton = event.target.closest("[data-edit-location]");
     if (editButton) {
       if (!state.authSession) {
@@ -121,7 +146,7 @@ function bindEvents() {
     await saveLocationRow(button.closest("tr"));
   });
 
-  els.datasetsTableBody.addEventListener("click", async (event) => {
+  els.datasetsTableBody?.addEventListener("click", async (event) => {
     const editButton = event.target.closest("[data-edit-dataset]");
     if (editButton) {
       if (!state.authSession) {
@@ -138,13 +163,23 @@ function bindEvents() {
     if (!button) return;
     await saveDatasetRow(button.closest("tr"));
   });
+
+  els.adminUsersTableBody?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-save-admin-user]");
+    if (!button) return;
+    await saveAdminUserRow(button.closest("tr"));
+  });
 }
 
 async function loadAll() {
   setConnectionStatus("Loading", "status-muted");
   try {
+    loadLanguageSettings();
     await loadDatasets({ quiet: true });
+    await loadCalibrations({ quiet: true });
     await loadLocations({ quiet: true });
+    if (state.authSession) await loadAdminUsers({ quiet: true });
+    renderDashboardMetrics();
     setConnectionStatus(state.authSession ? "Admin connected" : "Public connected", "");
     setSignedOutHints();
   } catch (error) {
@@ -154,12 +189,28 @@ async function loadAll() {
   }
 }
 
+async function loadAdminUsers(options = {}) {
+  if (!els.adminUsersTableBody) return;
+  if (!state.authSession) {
+    state.adminUsers = [];
+    renderAdminUsers();
+    setStatus(els.adminUsersStatus, "Sign in to list admin users.");
+    return;
+  }
+
+  if (!options.quiet) setStatus(els.adminUsersStatus, "Loading admin users...");
+  state.adminUsers = await supabaseSelect(TABLES.adminUsers, "select=*&order=email.asc");
+  renderAdminUsers();
+  if (!options.quiet) setStatus(els.adminUsersStatus, `Loaded ${state.adminUsers.length} admin user(s).`);
+}
+
 async function loadLocations(options = {}) {
   if (!options.quiet) setStatus(els.locationSaveStatus, "Loading locations...");
   state.locations = await supabaseSelect(TABLES.locations, "select=*&order=farm_name.asc");
   state.hasLocationDraft = false;
   state.editingLocationId = null;
   renderLocations();
+  renderDashboardMetrics();
   if (!options.quiet) setStatus(els.locationSaveStatus, `Loaded ${state.locations.length} location row(s).`);
 }
 
@@ -169,19 +220,110 @@ async function loadDatasets(options = {}) {
   state.hasDatasetDraft = false;
   state.editingDatasetId = null;
   renderDatasets();
+  renderDashboardMetrics();
   if (!options.quiet) setStatus(els.datasetSaveStatus, `Loaded ${state.datasets.length} dataset row(s).`);
+}
+
+async function loadCalibrations(options = {}) {
+  try {
+    state.calibrations = await supabaseSelect(TABLES.calibrationSummary, "select=*&order=location_name.asc");
+  } catch (error) {
+    state.calibrations = [];
+    if (!options.quiet) {
+      setStatus(els.locationSaveStatus, `Calibration summary unavailable. Apply the observation/calibration SQL first. ${error.message}`, "error");
+    }
+  }
+}
+
+function renderDashboardMetrics() {
+  const farms = state.locations.filter((location) => location.active !== false);
+  const tideSources = state.datasets;
+  const unverifiedSources = tideSources.filter((dataset) => {
+    return !["verified", "complete"].includes(String(dataset.verification_status || "").toLowerCase());
+  });
+  const hiddenFarms = farms.filter((location) => location.public_visible === false || location.active === false);
+  const notVerifiedFarms = farms.filter((location) => {
+    const status = String(location.status || "").toLowerCase();
+    return status && !["active", "verified"].includes(status);
+  });
+  const notCalibrated = farms.filter((location) => {
+    return calibrationStatusForLocation(location).value === "none";
+  });
+  const expiringDatasets = tideSources.filter((dataset) => {
+    return datasetExpiresWithinMonths(dataset, 3);
+  });
+
+  setMetric("metricFarmCount", farms.length);
+  setMetric("metricTideSourceCount", tideSources.length);
+  setMetric("metricUnverifiedSources", unverifiedSources.length);
+  setMetric("metricHiddenFarms", hiddenFarms.length);
+  setMetric("metricNotVerifiedFarms", notVerifiedFarms.length);
+  setMetric("metricNotCalibrated", notCalibrated.length);
+  setMetric("metricExpiringDatasets", expiringDatasets.length);
+}
+
+function setMetric(id, value) {
+  if (els[id]) els[id].textContent = String(value);
+}
+
+function datasetExpiresWithinMonths(dataset, monthCount) {
+  if (!dataset.valid_to) return false;
+  const validTo = new Date(`${dataset.valid_to}T00:00:00Z`);
+  if (Number.isNaN(validTo.getTime())) return false;
+  const threshold = new Date();
+  threshold.setMonth(threshold.getMonth() + monthCount);
+  return validTo <= threshold;
 }
 
 function renderLocations() {
   const rows = state.hasLocationDraft ? [defaultLocation(), ...state.locations] : state.locations;
+  if (!els.locationCount || !els.locationsTableBody) return;
   els.locationCount.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"}`;
 
   if (!rows.length) {
-    els.locationsTableBody.innerHTML = emptyRow(9, "No visible locations returned from Supabase.");
+    els.locationsTableBody.innerHTML = emptyRow(11, "No visible locations returned from Supabase.");
     return;
   }
 
   els.locationsTableBody.innerHTML = rows.map((row, index) => renderLocationRow(row, index)).join("");
+}
+
+function renderAdminUsers() {
+  if (!els.adminUsersTableBody) return;
+  if (els.adminUserCount) {
+    els.adminUserCount.textContent = `${state.adminUsers.length} user${state.adminUsers.length === 1 ? "" : "s"}`;
+  }
+
+  if (!state.authSession) {
+    els.adminUsersTableBody.innerHTML = emptyRow(7, "Sign in to load admin users.");
+    return;
+  }
+
+  if (!state.adminUsers.length) {
+    els.adminUsersTableBody.innerHTML = emptyRow(7, "No admin users returned from Supabase.");
+    return;
+  }
+
+  els.adminUsersTableBody.innerHTML = state.adminUsers.map(renderAdminUserRow).join("");
+}
+
+function renderAdminUserRow(row) {
+  const role = row.role || "operator";
+  const activeValue = row.active === false ? "inactive" : "active";
+
+  return `
+    <tr data-user-id="${escapeAttribute(row.user_id)}">
+      <td>${readOnlyCell(row.email)}</td>
+      <td class="id-cell">${readOnlyCell(shortId(row.user_id))}</td>
+      <td>${selectInput("role", role, adminRoleOptions(role))}</td>
+      <td>${selectInput("active", activeValue, [["active", "Active"], ["inactive", "Inactive"]])}</td>
+      <td>${textInput("notes", row.notes, "notes")}</td>
+      <td>${readOnlyCell(formatDateTime(row.updated_at))}</td>
+      <td class="save-cell" data-admin-only>
+        <button type="button" data-save-admin-user ${state.authSession ? "" : "disabled"}>Save</button>
+      </td>
+    </tr>
+  `;
 }
 
 function renderLocationRow(row, index) {
@@ -191,8 +333,9 @@ function renderLocationRow(row, index) {
   const rowClass = [isNew ? "draft-row" : "", isEditing ? "editing-row" : ""].filter(Boolean).join(" ");
   const datasetOptions = [
     ["", "Not linked"],
-    ...state.datasets.map((dataset) => [dataset.dataset_key, dataset.dataset_name])
+    ...state.datasets.map((dataset) => [dataset.id, dataset.dataset_name])
   ];
+  const selectedDatasetId = row.default_tide_dataset_id || datasetIdForKey(row.default_tide_dataset_key);
 
   if (!isEditing) {
     return `
@@ -200,13 +343,18 @@ function renderLocationRow(row, index) {
         <td class="id-cell">${locationIdCell(row, index)}</td>
         <td>${readOnlyCell(row.farm_name)}</td>
         <td>${readOnlyCell(row.short_name)}</td>
+        <td>${readOnlyCell(row.region)}</td>
         <td>${readOnlyCell(formatCoordinate(row.latitude))}</td>
         <td>${readOnlyCell(formatCoordinate(row.longitude))}</td>
-        <td>${readOnlyCell(datasetLabel(row.default_tide_dataset_key))}</td>
+        <td>${readOnlyCell(datasetLabel(row.default_tide_dataset_id || row.default_tide_dataset_key))}</td>
         <td>${readOnlyCell(formatThreshold(row.default_harvest_threshold_m))}</td>
+        <td>${calibrationStatusCell(row)}</td>
         <td>${readOnlyCell(recordUseLabel(row, "Shown in app"))}</td>
         <td class="save-cell" data-admin-only>
-          <button type="button" data-edit-location ${state.authSession ? "" : "disabled"}>Edit</button>
+          <div class="row-action-stack">
+            <button type="button" data-edit-location ${state.authSession ? "" : "disabled"}>Edit</button>
+            ${editCalibrationLink(row)}
+          </div>
         </td>
       </tr>
     `;
@@ -217,13 +365,18 @@ function renderLocationRow(row, index) {
       <td class="id-cell">${locationIdCell(row, index)}</td>
       <td>${textInput("farm_name", row.farm_name, "name")}</td>
       <td>${textInput("short_name", row.short_name, "short name")}</td>
+      <td>${textInput("region", row.region, "region")}</td>
       <td>${numberInput("latitude", row.latitude, "latitude", "-90", "90", "0.000001")}</td>
       <td>${numberInput("longitude", row.longitude, "longitude", "-180", "180", "0.000001")}</td>
-      <td>${selectInput("default_tide_dataset_key", row.default_tide_dataset_key, datasetOptions)}</td>
+      <td>${selectInput("default_tide_dataset_id", selectedDatasetId, datasetOptions)}</td>
       <td>${numberInput("default_harvest_threshold_m", row.default_harvest_threshold_m ?? 0.7, "threshold", "0", "5", "0.05")}</td>
+      <td>${calibrationStatusCell(row)}</td>
       <td>${selectInput("app_use", locationUseValue(row), locationUseOptions())}</td>
       <td class="save-cell" data-admin-only>
-        <button type="button" data-save-location ${state.authSession ? "" : "disabled"}>${isNew ? "Create" : "Save"}</button>
+        <div class="row-action-stack">
+          <button type="button" data-save-location ${state.authSession ? "" : "disabled"}>${isNew ? "Create" : "Save"}</button>
+          ${editCalibrationLink(row)}
+        </div>
       </td>
     </tr>
   `;
@@ -231,6 +384,7 @@ function renderLocationRow(row, index) {
 
 function renderDatasets() {
   const rows = state.hasDatasetDraft ? [defaultDataset(), ...state.datasets] : state.datasets;
+  if (!els.datasetCount || !els.datasetsTableBody) return;
   els.datasetCount.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"}`;
 
   if (!rows.length) {
@@ -299,19 +453,27 @@ async function saveLocationRow(rowElement) {
     const current = id ? state.locations.find((row) => row.id === id) || {} : {};
     const appUse = rowValue(rowElement, "app_use");
     const farmName = requiredText(rowValue(rowElement, "farm_name"), "Location name");
+    const shortName = nullableText(rowValue(rowElement, "short_name"));
+    const selectedDatasetId = nullableText(rowValue(rowElement, "default_tide_dataset_id"));
+    const selectedDataset = datasetById(selectedDatasetId);
     const payload = {
-      farm_location_key: current.farm_location_key || normalizeKey(farmName),
+      farm_location_key: normalizeKey(shortName || farmName),
       farm_name: farmName,
-      short_name: nullableText(rowValue(rowElement, "short_name")),
+      short_name: shortName,
+      region: requiredText(rowValue(rowElement, "region") || current.region || "Kwale County", "Region"),
       latitude: nullableNumber(rowValue(rowElement, "latitude")),
       longitude: nullableNumber(rowValue(rowElement, "longitude")),
-      default_tide_dataset_key: nullableText(rowValue(rowElement, "default_tide_dataset_key")),
+      default_tide_dataset_key: selectedDataset?.dataset_key || null,
       default_harvest_threshold_m: nullableNumber(rowValue(rowElement, "default_harvest_threshold_m")) ?? 0.7,
       status: locationStatusForUse(appUse, current.status),
       public_visible: appUse === "public",
       active: appUse !== "inactive",
       country: current.country || "Kenya"
     };
+
+    if (supportsLocationDatasetIdField()) {
+      payload.default_tide_dataset_id = selectedDatasetId;
+    }
 
     setStatus(els.locationSaveStatus, "Saving location...");
     const savedRows = id
@@ -332,7 +494,7 @@ async function saveDatasetRow(rowElement) {
     const current = id ? state.datasets.find((row) => row.id === id) || {} : {};
     const datasetName = requiredText(rowValue(rowElement, "dataset_name"), "Dataset name");
     const tideLocationName = requiredText(rowValue(rowElement, "tide_location_name"), "Tide location name");
-    const tideLocationRegion = requiredText(rowValue(rowElement, "tide_location_region") || datasetRegionValue(current) || "Kenya", "Location region");
+    const tideLocationRegion = requiredText(rowValue(rowElement, "tide_location_region") || datasetRegionValue(current), "Location region");
     const datasetUse = rowValue(rowElement, "dataset_use");
     const payload = {
       dataset_key: current.dataset_key || normalizeDatasetKey(datasetName),
@@ -374,6 +536,25 @@ async function saveDatasetRow(rowElement) {
   }
 }
 
+async function saveAdminUserRow(rowElement) {
+  try {
+    requireSignedIn();
+    const userId = requiredText(rowElement.dataset.userId, "User ID");
+    const payload = {
+      role: rowValue(rowElement, "role") || "operator",
+      active: rowValue(rowElement, "active") === "active",
+      notes: nullableText(rowValue(rowElement, "notes"))
+    };
+
+    setStatus(els.adminUsersStatus, "Saving admin user...");
+    await supabasePatchBy(TABLES.adminUsers, "user_id", userId, payload);
+    await loadAdminUsers({ quiet: true });
+    setStatus(els.adminUsersStatus, "Admin user saved.");
+  } catch (error) {
+    setStatus(els.adminUsersStatus, writeErrorMessage(error), "error");
+  }
+}
+
 async function supabaseSelect(table, query) {
   return supabaseRequest(`${table}?${query}`);
 }
@@ -389,6 +570,15 @@ async function supabaseInsert(table, payload) {
 
 async function supabasePatch(table, id, payload) {
   return supabaseRequest(`${table}?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: payload,
+    prefer: "return=representation",
+    requireAuth: true
+  });
+}
+
+async function supabasePatchBy(table, field, value, payload) {
+  return supabaseRequest(`${table}?${encodeURIComponent(field)}=eq.${encodeURIComponent(value)}`, {
     method: "PATCH",
     body: payload,
     prefer: "return=representation",
@@ -553,10 +743,14 @@ function updateAuthUi() {
   const email = state.authSession?.user?.email || "signed-in admin";
 
   document.body.classList.toggle("admin-signed-in", signedIn);
+  document.body.classList.toggle("admin-login-required", !signedIn);
+  if (els.adminLoginModal) {
+    els.adminLoginModal.hidden = signedIn;
+  }
   els.adminSignIn.disabled = signedIn;
   els.adminSignOut.disabled = !signedIn;
-  els.newLocation.hidden = !signedIn;
-  els.newDataset.hidden = !signedIn;
+  if (els.newLocation) els.newLocation.hidden = !signedIn;
+  if (els.newDataset) els.newDataset.hidden = !signedIn;
 
   if (!signedIn) {
     state.hasLocationDraft = false;
@@ -565,16 +759,20 @@ function updateAuthUi() {
     state.editingDatasetId = null;
   }
 
-  document.querySelectorAll("[data-edit-location], [data-save-location], [data-edit-dataset], [data-save-dataset]").forEach((button) => {
+  document.querySelectorAll("[data-edit-location], [data-save-location], [data-edit-dataset], [data-save-dataset], [data-save-admin-user]").forEach((button) => {
     button.disabled = !signedIn;
   });
 
   if (signedIn) {
     setAuthStatus(`Signed in as ${email}. Hidden/internal rows are available if your policy allows them.`);
+    renderLocations();
+    renderAdminUsers();
     return;
   }
 
   setAuthStatus("Sign in with an approved Supabase Auth user to save changes.");
+  renderLocations();
+  renderAdminUsers();
 }
 
 function setSignedOutHints() {
@@ -597,6 +795,7 @@ function defaultLocation() {
     farm_location_key: "",
     farm_name: "",
     short_name: "",
+    region: "Kwale County",
     country: "Kenya",
     default_harvest_threshold_m: 0.7,
     status: "prototype_placeholder",
@@ -612,7 +811,7 @@ function defaultDataset() {
     dataset_name: "",
     tide_location_key: "",
     tide_location_name: "",
-    tide_location_region: "Kenya",
+    tide_location_region: "",
     tide_location_country: "Kenya",
     timezone: "Africa/Nairobi",
     prediction_year: year,
@@ -635,6 +834,28 @@ function readOnlyCell(value) {
   return text ? `<span class="readonly-value">${escapeHtml(text)}</span>` : `<span class="readonly-muted">-</span>`;
 }
 
+function calibrationStatusCell(location) {
+  const status = calibrationStatusForLocation(location);
+  return `<span class="status-pill calibration-status-pill" data-status="${escapeAttribute(status.value)}">${escapeHtml(status.label)}</span>`;
+}
+
+function calibrationStatusForLocation(location) {
+  if (!location?.id) return { value: "none", label: "None" };
+
+  const summary = state.calibrations.find((row) => row.location_id === location.id);
+  const status = String(summary?.calibration_status || "none").toLowerCase();
+
+  if (status === "complete") return { value: "complete", label: "Complete" };
+  if (status === "under_review") return { value: "under_review", label: "Under Review" };
+  if (status === "retired") return { value: "none", label: "None" };
+  return { value: "none", label: "None" };
+}
+
+function editCalibrationLink(location) {
+  if (!location?.id || !state.authSession) return "";
+  return `<a class="button-link row-action-link" href="./calibration.html?location_id=${escapeAttribute(encodeURIComponent(location.id))}">Edit calibration</a>`;
+}
+
 function readOnlyStack(values) {
   const lines = values
     .map((value) => valueOrEmpty(value).trim())
@@ -644,9 +865,21 @@ function readOnlyStack(values) {
   return `<div class="readonly-stack">${lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}</div>`;
 }
 
-function datasetLabel(datasetKey) {
-  const dataset = state.datasets.find((item) => item.dataset_key === datasetKey);
-  return dataset?.dataset_name || datasetKey || "";
+function datasetLabel(datasetRef) {
+  const dataset = state.datasets.find((item) => item.id === datasetRef || item.dataset_key === datasetRef);
+  return dataset?.dataset_name || datasetRef || "";
+}
+
+function datasetById(datasetId) {
+  return state.datasets.find((item) => item.id === datasetId) || null;
+}
+
+function datasetIdForKey(datasetKey) {
+  return state.datasets.find((item) => item.dataset_key === datasetKey)?.id || "";
+}
+
+function supportsLocationDatasetIdField() {
+  return state.locations.some((row) => Object.prototype.hasOwnProperty.call(row, "default_tide_dataset_id"));
 }
 
 function formatThreshold(value) {
@@ -669,6 +902,49 @@ function formatCoordinatePair(latitude, longitude) {
 function formatDateRange(start, end) {
   if (start && end) return `${start} to ${end}`;
   return start || end || "";
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function loadLanguageSettings() {
+  const settings = readLanguageSettings();
+  document.querySelectorAll("[data-language-status]").forEach((select) => {
+    select.value = settings[select.dataset.languageStatus] || "active";
+  });
+}
+
+function saveLanguageSettings() {
+  const settings = readLanguageSettings();
+  document.querySelectorAll("[data-language-status]").forEach((select) => {
+    settings[select.dataset.languageStatus] = select.value;
+  });
+
+  try {
+    window.localStorage.setItem(LANGUAGE_SETTINGS_KEY, JSON.stringify(settings));
+    setStatus(els.languageSettingsStatus, "Language status saved in this browser for the prototype.");
+  } catch {
+    setStatus(els.languageSettingsStatus, "Language status changed for this session only. Browser storage is blocked.", "error");
+  }
+}
+
+function readLanguageSettings() {
+  try {
+    const raw = window.localStorage.getItem(LANGUAGE_SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
 }
 
 function datasetDataFlags(row) {
@@ -719,9 +995,12 @@ function supportsDatasetRegionField() {
 
 function tideRegionOptions(selectedValue) {
   const baseOptions = [
-    ["Kenya", "Kenya"],
-    ["Tanzania", "Tanzania"],
-    ["Regional", "Regional / mixed"]
+    ["", "Select region"],
+    ["Kwale County", "Kwale County, Kenya"],
+    ["Mombasa County", "Mombasa County, Kenya"],
+    ["Lamu County", "Lamu County, Kenya"],
+    ["Dar es Salaam Region", "Dar es Salaam Region, Tanzania"],
+    ["Regional / mixed", "Regional / mixed"]
   ];
 
   if (selectedValue && !baseOptions.some(([value]) => value === selectedValue)) {
@@ -733,7 +1012,7 @@ function tideRegionOptions(selectedValue) {
 
 function countryForRegion(region) {
   const text = String(region || "").toLowerCase();
-  if (text.includes("tanzania")) return "Tanzania";
+  if (text.includes("dar es salaam") || text.includes("tanzania")) return "Tanzania";
   if (text.includes("regional")) return "Regional";
   return "Kenya";
 }
@@ -758,6 +1037,19 @@ function recordUseOptions(publicLabel = "Public") {
     ["internal", "Internal only"],
     ["inactive", "Inactive"]
   ];
+}
+
+function adminRoleOptions(selectedRole) {
+  const baseOptions = [
+    ["admin", "Admin"],
+    ["operator", "Operator"]
+  ];
+
+  if (selectedRole && !baseOptions.some(([value]) => value === selectedRole)) {
+    return [[selectedRole, formatStatus(selectedRole)], ...baseOptions];
+  }
+
+  return baseOptions;
 }
 
 function locationStatusForUse(appUse) {
@@ -812,11 +1104,13 @@ function rowValue(rowElement, field) {
 }
 
 function setConnectionStatus(text, extraClass) {
+  if (!els.adminConnectionStatus) return;
   els.adminConnectionStatus.textContent = text;
   els.adminConnectionStatus.className = `status-pill ${extraClass || ""}`.trim();
 }
 
 function setAuthStatus(message, type = "") {
+  if (!els.adminAuthStatus) return;
   els.adminAuthStatus.textContent = message;
   els.adminAuthStatus.dataset.status = type;
 }

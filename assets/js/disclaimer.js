@@ -1,19 +1,11 @@
+import { t } from "./language.js?v=20260615-admin-observations";
+
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
-
-const DISCLAIMER_TITLE = "Marine navigation and field-safety disclaimer";
-
-const DISCLAIMER_BODY = `
-  <p><strong>This Tide Planner is not a marine navigation system, official tide table, safety-of-life service, or emergency decision tool.</strong> It is provided only as general seaweed-farming planning guidance.</p>
-  <p>Do not use this app as the sole basis for navigation, vessel operation, port entry or departure, anchoring, mooring, route planning, swimming, diving, fishing, crossing channels, crossing reef flats, transporting people or goods, emergency response, or deciding whether conditions are safe.</p>
-  <p>Tide times and heights can be affected by source-data errors, unverified datasets, datum differences, timezone conversion, interpolation, weather, wind setup, atmospheric pressure, river flow, swell, currents, coastal shape, reef and lagoon effects, local obstructions, equipment error, user settings, offline/cache age, and changes made after a dataset was imported.</p>
-  <p>Before acting, check current local conditions and official or locally approved sources such as harbour authorities, national hydrographic or meteorological services, notices to mariners, tide gauges, trained local observers, and site supervisors. When in doubt, do not go out.</p>
-  <p>Use of this Tide Planner is at your own risk. The operators, developers, data processors, project partners, and local administrators cannot guarantee that the displayed tide information is accurate, complete, current, suitable for your location, or safe for any specific activity. They are not responsible for loss, damage, injury, crop loss, production loss, equipment loss, financial loss, or other consequences arising from reliance on, or use of, the displayed tide information.</p>
-  <p>You remain responsible for your own decisions and for following local rules, warnings, and instructions.</p>
-`;
 
 document.addEventListener("DOMContentLoaded", () => {
   ensureDisclaimerModal();
   bindFooterDisclaimerLinks();
+  document.addEventListener("seaweed-language-change", refreshDisclaimerText);
 
   if (!hasAcceptedThisSession()) {
     openDisclaimer({ requireAcknowledgement: true });
@@ -32,19 +24,34 @@ function ensureDisclaimerModal() {
   modal.setAttribute("hidden", "");
   modal.innerHTML = `
     <div class="marine-disclaimer-panel" role="document">
-      <p class="eyebrow">Safety notice</p>
-      <h2 id="marineDisclaimerTitle">${DISCLAIMER_TITLE}</h2>
+      <p class="eyebrow" data-disclaimer-eyebrow>${t("disclaimer.eyebrow")}</p>
+      <h2 id="marineDisclaimerTitle">${t("disclaimer.title")}</h2>
       <div class="marine-disclaimer-copy">
-        ${DISCLAIMER_BODY}
+        ${t("disclaimer.body")}
       </div>
       <div class="marine-disclaimer-actions">
-        <button type="button" id="marineDisclaimerAccept">I understand - continue</button>
+        <button type="button" id="marineDisclaimerAccept">${t("disclaimer.accept")}</button>
       </div>
     </div>
   `;
 
   document.body.appendChild(modal);
   modal.querySelector("#marineDisclaimerAccept").addEventListener("click", acknowledgeDisclaimer);
+}
+
+function refreshDisclaimerText() {
+  const modal = document.getElementById("marineDisclaimerModal");
+  if (!modal) return;
+
+  const eyebrow = modal.querySelector("[data-disclaimer-eyebrow]");
+  const title = modal.querySelector("#marineDisclaimerTitle");
+  const copy = modal.querySelector(".marine-disclaimer-copy");
+  const accept = modal.querySelector("#marineDisclaimerAccept");
+
+  if (eyebrow) eyebrow.textContent = t("disclaimer.eyebrow");
+  if (title) title.textContent = t("disclaimer.title");
+  if (copy) copy.innerHTML = t("disclaimer.body");
+  if (accept) accept.textContent = t("disclaimer.accept");
 }
 
 function bindFooterDisclaimerLinks() {

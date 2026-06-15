@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Dataset Importer - Seaweed Tide Planner</title>
+  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-admin-split">
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div>
+        <p class="eyebrow">Seaweed farming tide guidance</p>
+        <h1>Dataset Importer</h1>
+      </div>
+      <div class="admin-header-controls">
+        <nav class="app-nav" aria-label="Main navigation">
+          <a href="./index.html?v=20260615-admin-split">Tides</a>
+          <a href="./map.html?v=20260615-admin-split">Map</a>
+          <a href="./admin.html" class="desktop-admin-link">Admin</a>
+        </nav>
+        <div class="admin-header-status">
+          <span id="importerConnectionStatus" class="status-pill status-muted">Connecting</span>
+          <p id="importerAuthStatus" class="admin-auth-status">Sign in with an approved Supabase admin account.</p>
+        </div>
+        <form id="importerAuthForm" class="admin-auth-inline">
+          <label>
+            Email
+            <input id="importerEmail" type="email" autocomplete="email" required>
+          </label>
+          <label>
+            Password
+            <input id="importerPassword" type="password" autocomplete="current-password" required>
+          </label>
+          <button id="importerSignIn" type="submit">Sign in</button>
+          <button id="importerSignOut" type="button">Sign out</button>
+        </form>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-shell admin-shell importer-shell admin-layout">
+    <aside class="admin-sidebar" aria-label="Admin menu">
+      <h2>Admin</h2>
+      <a href="./admin.html">Dashboard</a>
+
+      <p class="admin-menu-heading">Tide Planner Settings</p>
+      <a href="./admin_settings.html">Settings</a>
+
+      <p class="admin-menu-heading">Location &amp; Tide Data</p>
+      <a href="./locations.html">Locations</a>
+      <a href="./importer.html" aria-current="page">Tide dataset importer</a>
+      <a href="./calibration.html">Location tide calibration</a>
+      <a href="./observation.html">Observation form</a>
+    </aside>
+
+    <section class="admin-content">
+    <section id="importerLocked" class="panel importer-locked-card">
+      <h2>Admin sign-in required</h2>
+      <p>This page previews tide dataset imports and reads dataset row counts. It is only unlocked after Supabase Auth sign-in and the `tide_is_admin()` check succeeds.</p>
+      <p class="field-hint">The service-role key is never used in this browser page. Raw-row uploads run through authenticated Tide Planner admin policies, with the local importer kept as a fallback.</p>
+    </section>
+
+    <section id="importerWorkspace" class="importer-workspace" hidden>
+      <details class="admin-management-card" open>
+        <summary class="admin-card-summary">
+          <span>
+            <strong>Tide datasets</strong>
+            <small>Processed tide data batches, editable source metadata, and calculated import status</small>
+          </span>
+          <span id="importDatasetCount" class="status-pill">0 rows</span>
+        </summary>
+
+        <div class="admin-card-body">
+          <div class="admin-toolbar">
+            <button id="reloadDatasets" type="button">Reload</button>
+            <button id="newDataset" type="button">Add dataset</button>
+            <span id="datasetSaveStatus" class="admin-status" aria-live="polite"></span>
+          </div>
+
+          <div class="responsive-table-wrap">
+            <table class="management-table admin-data-table importer-dataset-table">
+              <thead>
+                <tr>
+                  <th>Dataset ID</th>
+                  <th>Name</th>
+                  <th>Location name</th>
+                  <th>Location region</th>
+                  <th>Location coordinates</th>
+                  <th>Source name</th>
+                  <th>Verification</th>
+                  <th>Dataset use</th>
+                  <th>Dataset properties</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="datasetsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <section class="panel">
+        <div class="section-head compact">
+          <div>
+            <h2>CSV Import Preview</h2>
+            <p class="field-hint">Choose Import from a dataset row, then validate and upload the normalized raw tide CSVs for that dataset.</p>
+          </div>
+          <span id="importWriteStatusPill" class="status-pill status-muted">Select dataset</span>
+        </div>
+
+        <form id="importPreviewForm" class="import-preview-form">
+          <div id="selectedImportTarget" class="selected-import-target empty-state"></div>
+          <label>
+            Hourly predictions CSV
+            <input id="hourlyCsvInput" type="file" accept=".csv,text/csv">
+          </label>
+          <label>
+            Tide events CSV
+            <input id="eventsCsvInput" type="file" accept=".csv,text/csv">
+          </label>
+          <label class="inline-check">
+            <input id="replaceExistingRows" type="checkbox">
+            Replace existing rows for selected dataset
+          </label>
+          <div class="button-row">
+            <button type="submit">Preview CSVs</button>
+            <button id="runSupabaseImport" type="button" disabled>Import to Supabase</button>
+            <button id="clearImportPreview" type="button">Clear</button>
+          </div>
+        </form>
+
+        <hr class="importer-divider">
+
+        <details class="csv-format-guide">
+          <summary>CSV Format Examples</summary>
+          <div class="csv-example-grid">
+            <article class="csv-example-card">
+              <h3>Hourly predictions CSV</h3>
+              <a class="button-link" href="./assets/examples/tide_hourly_predictions_import_example.csv" download>Download hourly example</a>
+            </article>
+            <article class="csv-example-card">
+              <h3>Tide events CSV</h3>
+              <a class="button-link" href="./assets/examples/tide_events_import_example.csv" download>Download events example</a>
+            </article>
+          </div>
+        </details>
+
+        <div id="importPreviewStatus" class="admin-status" aria-live="polite"></div>
+        <div id="importPreviewResults" class="import-preview-results"></div>
+      </section>
+
+      <details class="panel warning">
+        <summary class="local-fallback-summary">Local fallback importer command</summary>
+        <p class="field-hint">Use this only if the browser import is blocked by Supabase policies or a very large file needs a private local upload path.</p>
+        <pre class="command-block"><code id="importCommand">python 04_Superbase\V0_Tide_Planner\tools\tide_dataset_importer.py `
+  --dataset-id &lt;selected_dataset_id&gt; `
+  --hourly-csv path\to\tide_hourly_predictions_import.csv `
+  --events-csv path\to\tide_events_import.csv `
+  --replace-existing</code></pre>
+      </details>
+    </section>
+    </section>
+  </main>
+
+  <footer class="marine-disclaimer-footer">
+    <p><strong class="safety-label">Safety:</strong> <span class="marine-disclaimer-text">Not for marine navigation or safety-of-life decisions. Tide guidance may be wrong, stale, unverified, or affected by local weather and sea conditions. Check official/local sources and current conditions before acting.</span> <button type="button" data-disclaimer-open>Full disclaimer</button></p>
+  </footer>
+
+  <script type="module" src="./assets/js/disclaimer.js?v=20260615-admin-split"></script>
+  <script type="module" src="./assets/js/importer_page_v2.js?v=20260615-admin-split"></script>
+</body>
+</html>

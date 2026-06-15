@@ -6,123 +6,182 @@
   <meta name="theme-color" content="#0f766e">
   <meta name="robots" content="noindex,nofollow">
   <title>Admin - Seaweed Tide Planner</title>
-  <link rel="stylesheet" href="./assets/css/tides.css?v=20260611-mobile-nav-cleanup">
+  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-admin-settings">
 </head>
-<body>
+<body class="admin-console-page">
   <header class="app-header">
     <div class="app-header-inner">
       <div>
         <p class="eyebrow">Seaweed farming tide guidance</p>
-        <h1>Admin</h1>
+        <h1>Admin Home</h1>
       </div>
-      <div class="admin-header-controls">
+      <div class="admin-header-controls compact">
         <nav class="app-nav" aria-label="Main navigation">
-          <a href="./index.html">Tides</a>
-          <a href="./map.html">Map</a>
+          <a href="./index.html?v=20260615-admin-settings">Tides</a>
+          <a href="./map.html?v=20260615-admin-settings">Map</a>
           <a href="./admin.html" class="desktop-admin-link" aria-current="page">Admin</a>
         </nav>
         <div class="admin-header-status">
           <span id="adminConnectionStatus" class="status-pill status-muted">Connecting</span>
-          <p id="adminAuthStatus" class="admin-auth-status">Sign in with an approved Supabase Auth user to save changes.</p>
-        </div>
-        <form id="adminAuthForm" class="admin-auth-inline">
-          <label>
-            Email
-            <input id="adminEmail" type="email" autocomplete="email" required>
-          </label>
-          <label>
-            Password
-            <input id="adminPassword" type="password" autocomplete="current-password" required>
-          </label>
-          <button id="adminSignIn" type="submit">Sign in</button>
+          <p id="adminAuthStatus" class="admin-auth-status">Sign in with an approved Supabase Auth user.</p>
           <button id="adminSignOut" type="button">Sign out</button>
-        </form>
+        </div>
       </div>
     </div>
   </header>
 
-  <main class="app-shell admin-shell">
-    <details class="admin-management-card" open>
-      <summary class="admin-card-summary">
-        <span>
-          <strong>Locations</strong>
-          <small>Farm/app locations shown to users</small>
-        </span>
-        <span id="locationCount" class="status-pill">0 rows</span>
-      </summary>
+  <main class="app-shell admin-shell admin-layout">
+    <aside class="admin-sidebar" aria-label="Admin menu">
+      <h2>Admin</h2>
+      <a href="./admin.html" aria-current="page">Dashboard</a>
 
-      <div class="admin-card-body">
-        <div class="admin-toolbar">
-          <button id="reloadLocations" type="button">Reload</button>
-          <button id="newLocation" type="button">Add location</button>
-          <span id="locationSaveStatus" class="admin-status" aria-live="polite"></span>
+      <p class="admin-menu-heading">Tide Planner Settings</p>
+      <a href="./admin_settings.html">Settings</a>
+
+      <p class="admin-menu-heading">Location &amp; Tide Data</p>
+      <a href="./locations.html">Locations</a>
+      <a href="./importer.html">Tide dataset importer</a>
+      <a href="./calibration.html">Location tide calibration</a>
+      <a href="./observation.html">Observation form</a>
+    </aside>
+
+    <section class="admin-content">
+      <section class="panel admin-dashboard-panel">
+        <div class="section-head compact">
+          <div>
+            <h2>Tide Planner Dashboard</h2>
+            <p class="field-hint">Desktop admin overview for the Tide Planner prototype.</p>
+          </div>
+          <button id="reloadAdminDashboard" type="button">Reload</button>
         </div>
 
-        <div class="responsive-table-wrap">
-          <table class="management-table admin-data-table">
-            <thead>
-              <tr>
-                <th>Location ID</th>
-                <th>Name</th>
-                <th>Short name</th>
-                <th>Latitude</th>
-                <th>Longitude</th>
-                <th>Associated tide dataset</th>
-                <th>Harvest tide <= (m)</th>
-                <th>App use</th>
-                <th data-admin-only>Action</th>
-              </tr>
-            </thead>
-            <tbody id="locationsTableBody"></tbody>
-          </table>
+        <div class="admin-metric-grid">
+          <article class="admin-metric-card">
+            <span>Farms</span>
+            <strong id="metricFarmCount">--</strong>
+          </article>
+          <article class="admin-metric-card">
+            <span>Tide sources</span>
+            <strong id="metricTideSourceCount">--</strong>
+          </article>
+          <article class="admin-metric-card warning">
+            <span>Tide sources not verified</span>
+            <strong id="metricUnverifiedSources">--</strong>
+          </article>
+          <article class="admin-metric-card warning">
+            <span>Farms hidden</span>
+            <strong id="metricHiddenFarms">--</strong>
+          </article>
+          <article class="admin-metric-card warning">
+            <span>Farms not verified</span>
+            <strong id="metricNotVerifiedFarms">--</strong>
+          </article>
+          <article class="admin-metric-card warning">
+            <span>Farms not calibrated</span>
+            <strong id="metricNotCalibrated">--</strong>
+          </article>
+          <article class="admin-metric-card warning">
+            <span>Datasets ending &lt; 3 months</span>
+            <strong id="metricExpiringDatasets">--</strong>
+          </article>
         </div>
-      </div>
-    </details>
+      </section>
 
-    <details class="admin-management-card" open>
-      <summary class="admin-card-summary">
-        <span>
-          <strong>Tide datasets</strong>
-          <small>Processed tide data batches and source metadata</small>
-        </span>
-        <span id="datasetCount" class="status-pill">0 rows</span>
-      </summary>
-
-      <div class="admin-card-body">
-        <div class="admin-toolbar">
-          <button id="reloadDatasets" type="button">Reload</button>
-          <button id="newDataset" type="button">Add dataset</button>
-          <span id="datasetSaveStatus" class="admin-status" aria-live="polite"></span>
+      <section class="panel admin-settings-panel">
+        <h2>Admin Areas</h2>
+        <div class="admin-area-group">
+          <div class="admin-area-heading">
+            <h3>Locations</h3>
+            <p class="field-hint">Farm records, local calibration status, and field observation entry.</p>
+          </div>
+          <div class="admin-shortcut-grid">
+            <a class="admin-shortcut-card" href="./locations.html#locations">
+              <strong>Locations Table</strong>
+              <span>Farm/app locations, GPS coordinates, app visibility, and linked tide dataset.</span>
+            </a>
+            <a class="admin-shortcut-card" href="./calibration.html">
+              <strong>Calibration Table</strong>
+              <span>Compact status table for tide calibration by location.</span>
+            </a>
+            <a class="admin-shortcut-card" href="./calibration.html">
+              <strong>Calibration Inputs</strong>
+              <span>Edit one farm/location tide calibration record at a time.</span>
+            </a>
+            <a class="admin-shortcut-card" href="./observation.html">
+              <strong>Observation Form</strong>
+              <span>Enter local tide observations collected in the field.</span>
+            </a>
+          </div>
         </div>
 
-        <div class="responsive-table-wrap">
-          <table class="management-table admin-data-table">
-            <thead>
-              <tr>
-                <th>Dataset ID</th>
-                <th>Name</th>
-                <th>Location name</th>
-                <th>Location region</th>
-                <th>Location coordinates</th>
-                <th>Coverage dates</th>
-                <th>Source name</th>
-                <th>Verification</th>
-                <th>Dataset use</th>
-                <th data-admin-only>Action</th>
-              </tr>
-            </thead>
-            <tbody id="datasetsTableBody"></tbody>
-          </table>
+        <div class="admin-area-group">
+          <div class="admin-area-heading">
+            <h3>Tide Dataset</h3>
+            <p class="field-hint">Reference tide datasets, source metadata, and raw data import tools.</p>
+          </div>
+          <div class="admin-shortcut-grid">
+            <a class="admin-shortcut-card" href="./locations.html#datasets">
+              <strong>Tide Datasets Table</strong>
+              <span>Reference source metadata, coverage dates, verification, and dataset use.</span>
+            </a>
+            <a class="admin-shortcut-card" href="./importer.html">
+              <strong>Tide Dataset Importer</strong>
+              <span>Preview and import raw tide CSV data into selected datasets.</span>
+            </a>
+          </div>
         </div>
-      </div>
-    </details>
+
+        <div class="admin-area-group">
+          <div class="admin-area-heading">
+            <h3>Tide Planner Settings</h3>
+            <p class="field-hint">Admin users, roles, language status, and database connection notes.</p>
+          </div>
+          <div class="admin-shortcut-grid">
+            <a class="admin-shortcut-card" href="./admin_settings.html#admin-users">
+              <strong>Admin Users</strong>
+              <span>List approved users and their Tide Planner role.</span>
+            </a>
+            <a class="admin-shortcut-card" href="./admin_settings.html#languages">
+              <strong>Languages</strong>
+              <span>Set whether English and Kiswahili are active or inactive.</span>
+            </a>
+            <a class="admin-shortcut-card" href="./admin_settings.html#database">
+              <strong>Database Connection</strong>
+              <span>Supabase project reference and browser credential notes.</span>
+            </a>
+          </div>
+        </div>
+      </section>
+    </section>
   </main>
 
+  <section id="adminLoginModal" class="admin-login-modal" role="dialog" aria-modal="true" aria-labelledby="adminLoginTitle" hidden>
+    <div class="admin-login-panel" role="document">
+      <p class="eyebrow">Admin sign in</p>
+      <h2 id="adminLoginTitle">Seaweed Tide Planner Admin</h2>
+      <p class="field-hint">Enter approved Supabase admin credentials to open the desktop admin dashboard.</p>
+      <form id="adminAuthForm" class="admin-login-form">
+        <label>
+          Email
+          <input id="adminEmail" type="email" autocomplete="email" required>
+        </label>
+        <label>
+          Password
+          <input id="adminPassword" type="password" autocomplete="current-password" required>
+        </label>
+        <div class="button-row">
+          <button id="adminSignIn" type="submit">Sign in</button>
+          <a class="button-link" href="./index.html">Back to tides</a>
+        </div>
+      </form>
+    </div>
+  </section>
+
   <footer class="marine-disclaimer-footer">
-    <p><strong>Safety:</strong> Not for marine navigation or safety-of-life decisions. Tide guidance may be wrong, stale, unverified, or affected by local weather and sea conditions. Check official/local sources and current conditions before acting. <button type="button" data-disclaimer-open>Full disclaimer</button></p>
+    <p><strong class="safety-label">Safety:</strong> <span class="marine-disclaimer-text">Not for marine navigation or safety-of-life decisions. Tide guidance may be wrong, stale, unverified, or affected by local weather and sea conditions. Check official/local sources and current conditions before acting.</span> <button type="button" data-disclaimer-open>Full disclaimer</button></p>
   </footer>
 
-  <script type="module" src="./assets/js/disclaimer.js?v=20260611-disclaimer-losses"></script>
-  <script type="module" src="./assets/js/admin_page.js?v=20260611-disclaimer"></script>
+  <script type="module" src="./assets/js/disclaimer.js?v=20260615-admin-settings"></script>
+  <script type="module" src="./assets/js/admin_page.js?v=20260615-admin-settings"></script>
 </body>
 </html>

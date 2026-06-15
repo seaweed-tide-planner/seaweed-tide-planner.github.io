@@ -15,7 +15,7 @@ export const APP_CONFIG = {
     enabled: false,
     publicReadsEnabled: true
   },
-  defaultLocationKey: "kenya-coast-reference",
+  defaultLocationKey: "kenya-coast",
   defaultLocale: "en-GB",
   storageKeys: {
     selectedLocation: "seaweed_tide_planner:selected_location",

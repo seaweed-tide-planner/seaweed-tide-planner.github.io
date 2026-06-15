@@ -1,5 +1,18 @@
-import { APP_CONFIG } from "./config.js?v=20260611-public-reads";
-import { getLocations, getProfiles, loadPublicFarmLocations } from "./tide_data.js?v=20260611-public-reads";
+import { APP_CONFIG } from "./config.js?v=20260612-location-identifiers";
+import {
+  getDataStatus,
+  getLocations,
+  getProfiles,
+  loadPublicFarmLocations,
+  loadPublicTideDatasetBundle,
+  loadPublicTideReferences
+} from "./tide_data.js?v=20260615-admin-observations";
+import {
+  getFarmLocationOfflineBundle,
+  isOfflineStorageSupported,
+  removeFarmLocationOfflineBundle,
+  saveFarmLocationOfflineBundle
+} from "./offline_store.js?v=20260611-pwa-foundation";
 import {
   findNextHarvestLow,
   moonEvents,
@@ -26,10 +39,15 @@ import {
   formatTime,
   localDateKey,
   startOfMonthKey,
-  statusLabel,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260611-chart-interactions";
+import { renderTideChart } from "./tide_charts.js?v=20260615-admin-observations";
+import {
+  getLocale,
+  t,
+  translateDataText,
+  translateStatusLabel
+} from "./language.js?v=20260615-admin-observations";
 
 const state = {
   location: null,
@@ -39,17 +57,53 @@ const state = {
   forecastDays: 7,
   overviewMonths: 3,
   lowListDays: 14,
+  includeTideReferences: false,
   lastForecast: null,
   forecastRangeUserSelected: false,
-  overviewRangeUserSelected: false
+  overviewRangeUserSelected: false,
+  runtimeBundle: null,
+  runtimeTideData: null,
+  offlineBundle: null,
+  offlineTideData: null,
+  tideDataStatus: "loading",
+  forecastRefreshKey: ""
 };
 
 const els = {};
-let tideLocations = getLocations();
+let farmLocations = getLocations();
+let tideReferenceLocations = [];
+let tideLocations = farmLocations;
 const TIDE_PROFILES = getProfiles();
+const FORECAST_AUTO_REFRESH_MS = 5 * 60 * 1000;
+const LEGACY_LOCATION_KEY_ALIASES = {
+  "kenya-coast-reference": "kenya-coast",
+  "funzi-placeholder": "funzi",
+  "shangani-placeholder": "shangani",
+  "shimoni-placeholder": "shimoni",
+  "bati-seaweed-group": "bati",
+  "chiromo-seaweed-farmers": "chiromo",
+  "daima-self-help-group": "daima",
+  "furaha-seaweed-group": "furaha",
+  "imani-seaweed-farmers-gazi": "imani",
+  "jimbo-youth-group": "jimbo",
+  "kibuyuni-seaweed-farmers-cooperative": "kibuyuni",
+  "kijiweni-self-help-group": "kijiweni",
+  "mkwiro-seaweed-development-group": "mkwiro",
+  "mtimbwani-seaweed": "mtimbwani",
+  "nuru-isamic": "nuru",
+  "shangani-amani-enterprises": "shangani-amani",
+  "siwema-environmental-conservation-group": "siwema",
+  "tumbe-seaweed-farmers": "tumbe",
+  "tunusuru-conservation-group": "tunusuru",
+  "tushirikiane-conservation-women": "tushirikiane",
+  "wasini-seaweed-group": "wasini",
+  "yungi-mwenjeni-conservation-group": "yungi-mwenjeni",
+  "fremantle-reference": "fremantle"
+};
 const MOBILE_QUERY = window.matchMedia("(max-width: 620px)");
 const SYMBOLS = {
   plant: "\uD83C\uDF3F",
+  tideReference: "\u2248",
   newMoon: "\uD83C\uDF11",
   fullMoon: "\uD83C\uDF15",
   down: "\u25BC"
@@ -64,10 +118,11 @@ const MOON_PHASE_SYMBOLS = [
   "\uD83C\uDF17",
   "\uD83C\uDF18"
 ];
+let tideDataLoadSequence = 0;
 const TREND_SYMBOLS = {
-  Slack: "\u2194",
-  Flooding: "\u2197",
-  Ebbing: "\u2198"
+  slack: "\u2194",
+  flooding: "\u2197",
+  ebbing: "\u2198"
 };
 const SOLAR_ZENITH_DEG = 90.833;
 const PROFILE_REFERENCE_COORDINATES = {
@@ -85,11 +140,15 @@ async function init() {
   bindEvents();
   setLocation(resolveInitialLocationKey(), { updateUrl: false });
   window.setInterval(renderClock, 30000);
+  window.setInterval(refreshForecastIfNeeded, 60000);
 }
 
 function cacheElements() {
   [
     "locationSelect",
+    "includeTideReferences",
+    "selectedLocationIcon",
+    "selectedLocationName",
     "locationMeta",
     "locationReferenceStation",
     "localClock",
@@ -126,7 +185,12 @@ function cacheElements() {
     "sourceDetails",
     "safetyDetails",
     "locationDetails",
-    "lastUpdated"
+    "lastUpdated",
+    "connectivityStatus",
+    "showOnMapButton",
+    "offlineLocationStatus",
+    "offlineSaveLocation",
+    "offlineRemoveLocation"
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -140,21 +204,126 @@ function cacheElements() {
 }
 
 async function loadLocationRecords() {
-  const result = await loadPublicFarmLocations();
-  if (Array.isArray(result.locations) && result.locations.length) {
-    tideLocations = result.locations;
+  const [farmResult, referenceResult] = await Promise.all([
+    loadPublicFarmLocations(),
+    loadPublicTideReferences()
+  ]);
+
+  if (Array.isArray(farmResult.locations) && farmResult.locations.length) {
+    farmLocations = farmResult.locations;
+  }
+
+  tideReferenceLocations = Array.isArray(referenceResult.references)
+    ? referenceResult.references.map(tideReferenceToLocation).filter(Boolean)
+    : [];
+
+  tideLocations = visibleLocations();
+}
+
+function visibleLocations() {
+  return state.includeTideReferences
+    ? [...farmLocations, ...tideReferenceLocations]
+    : [...farmLocations];
+}
+
+function allKnownLocations() {
+  return [...farmLocations, ...tideReferenceLocations];
+}
+
+function tideReferenceToLocation(reference) {
+  const datasetKey = reference.datasetKey || "";
+  const datasetId = reference.id || "";
+  const key = tideReferenceLocationKey(reference);
+  if (!key) return null;
+
+  const gps = reference.gps || (
+    Number.isFinite(reference.latitude) && Number.isFinite(reference.longitude)
+      ? { lat: reference.latitude, lon: reference.longitude }
+      : null
+  );
+
+  return {
+    key,
+    id: datasetId,
+    locationType: "tide_reference",
+    tideReferenceKey: reference.key,
+    name: reference.name || reference.datasetName || key,
+    shortName: reference.name || reference.datasetName || key,
+    region: reference.region || "",
+    country: reference.country || "",
+    timezone: reference.timezone || "Africa/Nairobi",
+    tideProfileKey: reference.tideProfileKey || "kenya_mombasa_reference",
+    defaultTideDatasetId: datasetId,
+    defaultTideDatasetKey: datasetKey,
+    defaultHarvestThresholdM: Number(reference.defaultHarvestThresholdM || 0.7),
+    gps,
+    gpsLabel: gps ? `${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)}` : t("map.gpsToConfirm"),
+    status: reference.status || "tide_reference",
+    publicVisible: true,
+    active: true,
+    notes: t("details.tideReferenceNote", {
+      dataset: translateDataText(reference.datasetName || reference.name || key)
+    })
+  };
+}
+
+function tideReferenceLocationKey(reference) {
+  const rawKey = reference?.id || reference?.datasetKey || reference?.key || "";
+  return rawKey ? `tide-reference-${rawKey}` : "";
+}
+
+function isTideReferenceLocation(location) {
+  return location?.locationType === "tide_reference";
+}
+
+function syncIncludeTideReferencesToggle() {
+  if (els.includeTideReferences) {
+    els.includeTideReferences.checked = state.includeTideReferences;
   }
 }
 
 function populateLocationSelect() {
+  tideLocations = visibleLocations();
+
+  if (state.includeTideReferences && tideReferenceLocations.length) {
+    els.locationSelect.innerHTML = [
+      renderLocationOptgroup(t("page.farmLocations"), farmLocations),
+      renderLocationOptgroup(t("page.tideDataLocations"), tideReferenceLocations)
+    ].join("");
+    return;
+  }
+
   els.locationSelect.innerHTML = tideLocations.map((location) => {
-    return `<option value="${escapeHtml(location.key)}">${escapeHtml(location.name)}</option>`;
+    return `<option value="${escapeHtml(location.key)}">${escapeHtml(translateDataText(location.name))}</option>`;
   }).join("");
+}
+
+function renderLocationOptgroup(label, locations) {
+  if (!locations.length) return "";
+  return `
+    <optgroup label="${escapeAttribute(label)}">
+      ${locations.map((location) => `<option value="${escapeAttribute(location.key)}">${escapeHtml(translateDataText(location.name))}</option>`).join("")}
+    </optgroup>
+  `;
 }
 
 function bindEvents() {
   els.locationSelect.addEventListener("change", () => {
     setLocation(els.locationSelect.value, { updateUrl: true });
+  });
+
+  els.includeTideReferences?.addEventListener("change", () => {
+    state.includeTideReferences = els.includeTideReferences.checked;
+    populateLocationSelect();
+
+    if (!state.includeTideReferences && isTideReferenceLocation(state.location)) {
+      setLocation(APP_CONFIG.defaultLocationKey, { updateUrl: true });
+      return;
+    }
+
+    if (state.location) {
+      els.locationSelect.value = state.location.key;
+    }
   });
 
   els.thresholdEnabled.addEventListener("change", () => {
@@ -206,6 +375,32 @@ function bindEvents() {
     renderLowTides();
   });
 
+  els.offlineSaveLocation?.addEventListener("click", () => {
+    void saveCurrentLocationOffline();
+  });
+
+  els.offlineRemoveLocation?.addEventListener("click", () => {
+    void removeCurrentLocationOffline();
+  });
+
+  document.addEventListener("seaweed-language-change", () => {
+    populateLocationSelect();
+    if (state.location) {
+      els.locationSelect.value = state.location.key;
+      syncIncludeTideReferencesToggle();
+      render();
+      void refreshOfflineLocationStatus();
+    }
+  });
+
+  window.addEventListener("online", () => {
+    void refreshOfflineLocationStatus();
+  });
+
+  window.addEventListener("offline", () => {
+    void refreshOfflineLocationStatus();
+  });
+
   window.addEventListener("resize", debounce(() => {
     const previousForecastDays = state.forecastDays;
     const previousOverviewMonths = state.overviewMonths;
@@ -227,7 +422,8 @@ function resolveInitialLocationKey() {
   if (getLocation(queryLocation)) return queryLocation;
 
   const saved = readStorage(APP_CONFIG.storageKeys.selectedLocation);
-  if (getLocation(saved)) return saved;
+  const savedLocation = getLocation(saved);
+  if (savedLocation && !isTideReferenceLocation(savedLocation)) return savedLocation.key;
 
   return APP_CONFIG.defaultLocationKey;
 }
@@ -236,12 +432,24 @@ function setLocation(locationKey, options = {}) {
   const location = getLocation(locationKey) || getLocation(APP_CONFIG.defaultLocationKey) || tideLocations[0];
   const profile = TIDE_PROFILES[location.tideProfileKey] || TIDE_PROFILES.kenya_mombasa_reference;
 
+  if (isTideReferenceLocation(location) && !state.includeTideReferences) {
+    state.includeTideReferences = true;
+    syncIncludeTideReferencesToggle();
+    populateLocationSelect();
+  }
+
   state.location = location;
   state.profile = profile;
+  state.runtimeBundle = null;
+  state.runtimeTideData = null;
+  state.offlineBundle = null;
+  state.offlineTideData = null;
+  state.tideDataStatus = "loading";
   state.lowListDays = 14;
   loadThresholdState();
   syncThresholdControls();
 
+  syncIncludeTideReferencesToggle();
   els.locationSelect.value = location.key;
   writeStorage(APP_CONFIG.storageKeys.selectedLocation, location.key);
 
@@ -252,27 +460,111 @@ function setLocation(locationKey, options = {}) {
   }
 
   render();
+  void loadRuntimeTideData();
+  void refreshOfflineLocationStatus();
+}
+
+async function loadRuntimeTideData() {
+  if (!state.location || !state.profile) return;
+
+  const sequence = ++tideDataLoadSequence;
+  const locationKey = state.location.key;
+  const datasetRef = state.location.defaultTideDatasetId || state.location.defaultTideDatasetKey || state.location.tideProfileKey;
+  const now = new Date();
+  const fromDate = addDaysToDateKey(localDateKey(now, state.profile.timezone), -2);
+  const toDate = addDaysToDateKey(localDateKey(now, state.profile.timezone), 110);
+
+  try {
+    if (navigator.onLine === false) {
+      await loadRuntimeTideDataFromOffline(locationKey, sequence);
+      return;
+    }
+
+    const bundle = await loadPublicTideDatasetBundle(datasetRef, {
+      datasetId: state.location.defaultTideDatasetId,
+      datasetKey: state.location.defaultTideDatasetKey,
+      fromDate,
+      toDate
+    });
+    if (sequence !== tideDataLoadSequence || state.location?.key !== locationKey) return;
+
+    const tideData = normalizeTideDataBundle(bundle, "supabase");
+    if (tideData.hasData) {
+      state.runtimeBundle = bundle;
+      state.runtimeTideData = tideData;
+      state.tideDataStatus = "supabase";
+      render();
+      return;
+    }
+
+    await loadRuntimeTideDataFromOffline(locationKey, sequence);
+  } catch (error) {
+    console.warn("Runtime tide data load failed.", error);
+    await loadRuntimeTideDataFromOffline(locationKey, sequence);
+  }
+}
+
+async function loadRuntimeTideDataFromOffline(locationKey, sequence) {
+  if (!isOfflineStorageSupported()) {
+    if (sequence === tideDataLoadSequence) {
+      state.runtimeBundle = null;
+      state.runtimeTideData = null;
+      state.tideDataStatus = "prototype";
+      render();
+    }
+    return;
+  }
+
+  try {
+    const bundle = await getFarmLocationOfflineBundle(locationKey);
+    if (sequence !== tideDataLoadSequence || state.location?.key !== locationKey) return;
+
+    state.offlineBundle = bundle;
+    state.offlineTideData = normalizeTideDataBundle(bundle, "offline");
+
+    if (state.offlineTideData.hasData) {
+      state.runtimeBundle = bundle;
+      state.runtimeTideData = state.offlineTideData;
+      state.tideDataStatus = "offline";
+    } else {
+      state.runtimeBundle = null;
+      state.runtimeTideData = null;
+      state.tideDataStatus = "prototype";
+    }
+
+    render();
+  } catch (error) {
+    console.warn("Offline tide data load failed.", error);
+    if (sequence === tideDataLoadSequence) {
+      state.runtimeBundle = null;
+      state.runtimeTideData = null;
+      state.tideDataStatus = "prototype";
+      render();
+    }
+  }
 }
 
 function render() {
   if (!state.location || !state.profile) return;
 
   renderClock();
+  renderConnectivityStatus();
   renderLocationSummary();
   syncThresholdControls();
   syncForecastRangeControls();
   syncOverviewRangeControls();
 
   const now = new Date();
+  state.forecastRefreshKey = forecastRefreshKey(now);
   const forecastRange = rangeAroundNow(now, 1, 95);
-  const fullCurve = tideCurve(state.profile, forecastRange.start, forecastRange.end, 30);
-  const fullExtremes = tideExtremes(fullCurve);
+  const fullCurve = tideCurveForRange(forecastRange, 30);
+  const fullExtremes = tideExtremesForRange(forecastRange, fullCurve);
   const weekRange = rangeAroundNow(now, 0.15, state.forecastDays);
-  const weekCurve = tideCurve(state.profile, weekRange.start, weekRange.end, 20);
-  const weekExtremes = tideExtremes(weekCurve);
+  const weekCurve = tideCurveForRange(weekRange, 20);
+  const weekExtremes = tideExtremesForRange(weekRange, weekCurve);
   const overviewRange = rangeAroundNow(now, 1, state.overviewMonths === 1 ? 34 : 95);
-  const overviewCurve = tideCurve(state.profile, overviewRange.start, overviewRange.end, 30);
-  const overviewExtremes = tideExtremes(overviewCurve);
+  const overviewCurve = tideCurveForRange(overviewRange, 30);
+  const overviewExtremes = tideExtremesForRange(overviewRange, overviewCurve);
   const moons = moonEvents(now, forecastRange.end);
   const springs = springWindows(now, forecastRange.end);
 
@@ -288,7 +580,8 @@ function render() {
     overviewCurve,
     overviewExtremes,
     moons,
-    springs
+    springs,
+    tideDataSource: activeTideData()
   };
 
   renderSummaryCards(state.lastForecast);
@@ -300,35 +593,173 @@ function render() {
   renderSafetyDetails();
 }
 
+function refreshForecastIfNeeded() {
+  if (!state.location || !state.profile) return;
+
+  const key = forecastRefreshKey(new Date());
+  if (key === state.forecastRefreshKey) return;
+
+  render();
+}
+
+function forecastRefreshKey(date) {
+  return String(Math.floor(date.getTime() / FORECAST_AUTO_REFRESH_MS));
+}
+
+function activeTideData() {
+  if (state.runtimeTideData?.hasData) return state.runtimeTideData;
+  if (state.offlineTideData?.hasData) return state.offlineTideData;
+  return null;
+}
+
+function tideCurveForRange(range, intervalMinutes = 30) {
+  const data = activeTideData();
+  const importedCurve = importedHourlyCurveForRange(data, range);
+  if (importedCurve.length >= 2) return importedCurve;
+
+  return tideCurve(state.profile, range.start, range.end, intervalMinutes);
+}
+
+function tideExtremesForRange(range, curve) {
+  const data = activeTideData();
+  const importedEvents = importedEventsForRange(data, range);
+  if (importedEvents.length) return importedEvents;
+
+  return tideExtremes(curve);
+}
+
+function importedHourlyCurveForRange(data, range) {
+  if (!data?.hourlyPoints?.length) return [];
+
+  const startMs = range.start.getTime();
+  const endMs = range.end.getTime();
+  const points = data.hourlyPoints.filter((point) => point.timeMs >= startMs && point.timeMs <= endMs);
+  const startHeight = interpolatedImportedHeight(range.start, data);
+  const endHeight = interpolatedImportedHeight(range.end, data);
+  const curve = [];
+
+  if (Number.isFinite(startHeight)) {
+    curve.push({ timeMs: startMs, date: new Date(startMs), heightM: startHeight });
+  }
+
+  curve.push(...points);
+
+  if (Number.isFinite(endHeight) && endMs > startMs) {
+    curve.push({ timeMs: endMs, date: new Date(endMs), heightM: endHeight });
+  }
+
+  return dedupeCurvePoints(curve).sort(sortByTime);
+}
+
+function importedEventsForRange(data, range) {
+  if (!data?.events?.length) return [];
+
+  const startMs = range.start.getTime();
+  const endMs = range.end.getTime();
+  return data.events.filter((event) => event.timeMs >= startMs && event.timeMs <= endMs);
+}
+
+function tideHeightForDate(date) {
+  const importedHeight = interpolatedImportedHeight(date, activeTideData());
+  return Number.isFinite(importedHeight) ? importedHeight : tideHeight(date, state.profile);
+}
+
+function interpolatedImportedHeight(date, data) {
+  if (!data?.hourlyPoints?.length) return NaN;
+
+  const timeMs = date.getTime();
+  let previous = null;
+  let next = null;
+
+  for (const point of data.hourlyPoints) {
+    if (point.timeMs === timeMs) return point.heightM;
+    if (point.timeMs < timeMs) {
+      previous = point;
+      continue;
+    }
+    next = point;
+    break;
+  }
+
+  if (!previous || !next) return NaN;
+
+  const span = next.timeMs - previous.timeMs;
+  if (span <= 0) return NaN;
+
+  const ratio = (timeMs - previous.timeMs) / span;
+  return previous.heightM + (next.heightM - previous.heightM) * ratio;
+}
+
+function dedupeCurvePoints(points) {
+  const byTime = new Map();
+  for (const point of points) {
+    byTime.set(point.timeMs, point);
+  }
+  return Array.from(byTime.values());
+}
+
 function renderClock() {
   if (!state.profile) return;
   const now = new Date();
-  els.localClock.textContent = formatDateTime(now, state.profile.timezone);
-  els.timeZoneLabel.textContent = `Times shown in ${state.profile.timezone}`;
+  const timezone = state.location?.timezone || state.profile.timezone;
+  els.localClock.textContent = formatDateTime(now, timezone, getLocale());
+  els.timeZoneLabel.textContent = t("clock.timezone", { timezone });
 }
 
 function renderLocationSummary() {
   const { location, profile } = state;
-  els.locationMeta.textContent = `${location.region}, ${location.country}`;
-  els.locationReferenceStation.textContent = `Reference station: ${referenceStationLabel(profile)}`;
-  els.verificationBadge.textContent = statusLabel(profile.verificationStatus);
+  if (els.selectedLocationIcon) {
+    els.selectedLocationIcon.textContent = isTideReferenceLocation(location)
+      ? SYMBOLS.tideReference
+      : SYMBOLS.plant;
+  }
+  if (els.selectedLocationName) {
+    els.selectedLocationName.textContent = translateDataText(location.name);
+  }
+  if (els.showOnMapButton) {
+    els.showOnMapButton.href = mapUrl(location);
+  }
+
+  els.locationMeta.textContent = [translateDataText(location.region), translateDataText(location.country)]
+    .filter(Boolean)
+    .join(", ");
+  els.locationReferenceStation.textContent = t("details.referenceStation", { station: referenceStationLabel(profile) });
+  els.verificationBadge.textContent = translateStatusLabel(profile.verificationStatus);
   els.verificationBadge.dataset.status = profile.verificationStatus;
-  els.datasetBadge.textContent = profile.version;
+  els.datasetBadge.textContent = datasetBadgeLabel();
 
   const gps = location.gps
     ? `${location.gps.lat.toFixed(5)}, ${location.gps.lon.toFixed(5)}`
-    : location.gpsLabel;
+    : translateDataText(location.gpsLabel);
 
   els.locationDetails.innerHTML = `
-    <span><strong>Location:</strong> ${escapeHtml(location.name)}</span>
-    <span><strong>GPS:</strong> ${escapeHtml(gps || "To be confirmed")}</span>
-    <span><strong>Tide profile:</strong> ${escapeHtml(profile.name)}</span>
+    <span><strong>${escapeHtml(t("details.location"))}</strong> ${escapeHtml(translateDataText(location.name))}</span>
+    <span><strong>${escapeHtml(t("details.gps"))}</strong> ${escapeHtml(gps || t("details.toBeConfirmed"))}</span>
+    <span><strong>${escapeHtml(t("details.dataset"))}</strong> ${escapeHtml(activeDatasetName())}</span>
   `;
 
 }
 
+function mapUrl(location) {
+  return `./map.html?v=20260615-admin-observations&location=${encodeURIComponent(location.key)}`;
+}
+
 function referenceStationLabel(profile) {
-  return String(profile?.name || "Reference station").replace(/\s+Reference$/i, "");
+  return translateDataText(String(profile?.name || t("details.referenceStationFallback"))).replace(/\s+Reference$/i, "");
+}
+
+function datasetBadgeLabel() {
+  const data = activeTideData();
+  if (data?.dataset?.dataset_name) return translateDataText(data.dataset.dataset_name);
+  if (state.tideDataStatus === "loading") return t("data.loadingTideData");
+  return translateDataText(state.profile.version);
+}
+
+function activeDatasetName() {
+  const data = activeTideData();
+  if (data?.dataset?.dataset_name) return translateDataText(data.dataset.dataset_name);
+  if (state.tideDataStatus === "loading") return t("data.loadingTideData");
+  return translateDataText(state.profile.version);
 }
 
 function renderSummaryCards(forecast) {
@@ -344,36 +775,285 @@ function renderSummaryCards(forecast) {
   if (nextHarvest) {
     renderHarvestSummary(nextHarvest, forecast);
   } else if (!state.thresholdEnabled) {
-    resetHarvestSummary("Harvest threshold hidden");
+    resetHarvestSummary(t("summary.harvestThresholdHidden"));
   } else {
-    resetHarvestSummary("No harvest window in range");
+    resetHarvestSummary(t("summary.noHarvestWindow"));
   }
 
-  els.lastUpdated.textContent = `Updated ${formatTime(forecast.now, state.profile.timezone)}`;
+  els.lastUpdated.textContent = t("lastUpdated.time", {
+    time: formatTime(forecast.now, state.profile.timezone, getLocale())
+  });
+}
+
+function renderConnectivityStatus() {
+  if (!els.connectivityStatus) return;
+  const isOnline = navigator.onLine !== false;
+  els.connectivityStatus.textContent = isOnline ? t("status.online") : t("status.offline");
+  els.connectivityStatus.dataset.status = isOnline ? "verified" : "pending_verification";
+}
+
+async function refreshOfflineLocationStatus() {
+  renderConnectivityStatus();
+  if (!els.offlineLocationStatus || !els.offlineSaveLocation || !els.offlineRemoveLocation) return;
+
+  if (!isOfflineStorageSupported()) {
+    els.offlineLocationStatus.textContent = t("offline.storageUnavailable");
+    els.offlineLocationStatus.dataset.status = "error";
+    els.offlineSaveLocation.disabled = true;
+    els.offlineRemoveLocation.hidden = true;
+    return;
+  }
+
+  if (!state.location) {
+    els.offlineLocationStatus.textContent = t("offline.selectLocation");
+    els.offlineLocationStatus.dataset.status = "muted";
+    els.offlineSaveLocation.disabled = true;
+    els.offlineRemoveLocation.hidden = true;
+    return;
+  }
+
+  els.offlineSaveLocation.disabled = false;
+  els.offlineLocationStatus.textContent = navigator.onLine === false
+    ? t("offline.notAvailableOffline")
+    : t("offline.notAvailable");
+  els.offlineLocationStatus.dataset.status = navigator.onLine === false ? "error" : "muted";
+  els.offlineSaveLocation.textContent = t("offline.make");
+  els.offlineRemoveLocation.hidden = true;
+
+  try {
+    const bundle = await getFarmLocationOfflineBundle(state.location.key);
+    state.offlineBundle = bundle;
+    state.offlineTideData = normalizeTideDataBundle(bundle, "offline");
+
+    if (bundle) {
+      els.offlineLocationStatus.textContent = formatOfflineBundleStatus(bundle);
+      els.offlineLocationStatus.dataset.status = state.offlineTideData.hasData ? "ready" : "error";
+      els.offlineSaveLocation.textContent = t("offline.update");
+      els.offlineRemoveLocation.hidden = false;
+      return;
+    }
+
+  } catch (error) {
+    console.warn("Offline status read failed.", error);
+    els.offlineLocationStatus.textContent = t("offline.statusUnavailable");
+    els.offlineLocationStatus.dataset.status = "error";
+    els.offlineRemoveLocation.hidden = true;
+  }
+}
+
+async function saveCurrentLocationOffline() {
+  if (!state.location || !state.profile) return;
+
+  setOfflineButtonsDisabled(true);
+  els.offlineLocationStatus.textContent = t("offline.downloading");
+  els.offlineLocationStatus.dataset.status = "loading";
+
+  try {
+    const savedBundle = await saveFarmLocationOfflineBundle(await buildCurrentOfflineBundle());
+    state.offlineBundle = savedBundle;
+    state.offlineTideData = normalizeTideDataBundle(savedBundle, "offline");
+    if (state.offlineTideData.hasData) {
+      state.runtimeBundle = savedBundle;
+      state.runtimeTideData = state.offlineTideData;
+      state.tideDataStatus = "offline";
+      render();
+    }
+    await refreshOfflineLocationStatus();
+  } catch (error) {
+    console.warn("Offline save failed.", error);
+    els.offlineLocationStatus.textContent = t("offline.saveFailed");
+    els.offlineLocationStatus.dataset.status = "error";
+  } finally {
+    setOfflineButtonsDisabled(false);
+  }
+}
+
+async function removeCurrentLocationOffline() {
+  if (!state.location) return;
+
+  setOfflineButtonsDisabled(true);
+  els.offlineLocationStatus.textContent = t("offline.removing");
+  els.offlineLocationStatus.dataset.status = "loading";
+
+  try {
+    await removeFarmLocationOfflineBundle(state.location.key);
+    state.offlineBundle = null;
+    await refreshOfflineLocationStatus();
+  } catch (error) {
+    console.warn("Offline remove failed.", error);
+    els.offlineLocationStatus.textContent = t("offline.removeFailed");
+    els.offlineLocationStatus.dataset.status = "error";
+  } finally {
+    setOfflineButtonsDisabled(false);
+  }
+}
+
+function setOfflineButtonsDisabled(disabled) {
+  if (els.offlineSaveLocation) els.offlineSaveLocation.disabled = disabled;
+  if (els.offlineRemoveLocation) els.offlineRemoveLocation.disabled = disabled;
+}
+
+async function buildCurrentOfflineBundle() {
+  const now = new Date();
+  const validFrom = localDateKey(now, state.profile.timezone);
+  const validTo = addMonthsToDateKey(validFrom, 3);
+  const dataStatus = getDataStatus();
+  const datasetId = state.location.defaultTideDatasetId || "";
+  const datasetKey = state.location.defaultTideDatasetKey || state.location.tideProfileKey;
+  const datasetBundle = await loadPublicTideDatasetBundle(datasetId || datasetKey, {
+    datasetId,
+    datasetKey,
+    fromDate: validFrom,
+    toDate: validTo
+  });
+
+  return {
+    locationKey: state.location.key,
+    locationName: state.location.name,
+    datasetId,
+    datasetKey,
+    profileKey: state.location.tideProfileKey,
+    validFrom,
+    validTo,
+    timezone: state.profile.timezone,
+    location: {
+      key: state.location.key,
+      name: state.location.name,
+      shortName: state.location.shortName,
+      region: state.location.region,
+      country: state.location.country,
+      gps: state.location.gps,
+      gpsLabel: state.location.gpsLabel,
+      status: state.location.status,
+      notes: state.location.notes
+    },
+    tideProfile: state.profile,
+    source: {
+      backendContext: dataStatus.backendContext,
+      dataMode: dataStatus.mode,
+      supabaseProjectRef: dataStatus.supabaseProjectRef,
+      profileSourceName: state.profile.sourceName,
+      profileSourceUrl: state.profile.sourceUrl,
+      verificationStatus: state.profile.verificationStatus,
+      verificationLabel: state.profile.verificationLabel,
+      datumLabel: state.profile.datumLabel,
+      version: state.profile.version
+    },
+    threshold: {
+      currentM: state.thresholdM,
+      enabled: state.thresholdEnabled,
+      defaultM: getDefaultThreshold(state.location, state.profile)
+    },
+    dataset: datasetBundle.dataset,
+    tideEvents: datasetBundle.tideEvents,
+    hourlyPredictions: datasetBundle.hourlyPredictions,
+    warningText: datasetBundle.dataset?.warning_text || state.profile.warningText,
+    warning: datasetBundle.warning,
+    note: datasetBundle.warning
+      ? t("offline.partialNote")
+      : t("offline.completeNote")
+  };
+}
+
+function formatOfflineBundleStatus(bundle) {
+  const eventCount = Array.isArray(bundle.tideEvents) ? bundle.tideEvents.length : 0;
+  const hourlyCount = Array.isArray(bundle.hourlyPredictions) ? bundle.hourlyPredictions.length : 0;
+  const hasData = eventCount > 0 || hourlyCount > 1;
+  return t(hasData ? "offline.available" : "offline.availablePartial");
+}
+
+function normalizeTideDataBundle(bundle, sourceType) {
+  const hourlyPoints = Array.isArray(bundle?.hourlyPredictions)
+    ? bundle.hourlyPredictions.map(normalizeHourlyPrediction).filter(Boolean).sort(sortByTime)
+    : [];
+  const events = Array.isArray(bundle?.tideEvents)
+    ? bundle.tideEvents.map(normalizeTideEvent).filter(Boolean).sort(sortByTime)
+    : [];
+
+  return {
+    sourceType,
+    dataset: bundle?.dataset || null,
+    hourlyPoints,
+    events,
+    hasData: hourlyPoints.length > 1 || events.length > 0,
+    savedAt: bundle?.savedAt || ""
+  };
+}
+
+function normalizeHourlyPrediction(row) {
+  const date = parsePredictionDate(row.prediction_time_utc);
+  const heightM = Number(row.height_m);
+  if (!date || !Number.isFinite(heightM)) return null;
+
+  return {
+    timeMs: date.getTime(),
+    date,
+    heightM,
+    sourceRow: row
+  };
+}
+
+function normalizeTideEvent(row) {
+  const date = parsePredictionDate(row.event_time_utc);
+  const heightM = Number(row.height_m);
+  const type = normalizeEventType(row.event_type);
+  if (!date || !Number.isFinite(heightM) || !type) return null;
+
+  return {
+    type,
+    timeMs: date.getTime(),
+    date,
+    heightM,
+    sourceRow: row
+  };
+}
+
+function parsePredictionDate(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  const normalized = /(?:z|[+-]\d{2}:?\d{2})$/i.test(text) ? text : `${text}Z`;
+  const date = new Date(normalized);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function normalizeEventType(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (text.startsWith("h")) return "high";
+  if (text.startsWith("l")) return "low";
+  return "";
+}
+
+function sortByTime(a, b) {
+  return a.timeMs - b.timeMs;
 }
 
 function renderTodayTides(forecast) {
   const todayKey = localDateKey(forecast.now, state.profile.timezone);
   const dayRange = localDayRange(todayKey, state.profile.timezone);
-  const dayCurve = tideCurve(state.profile, dayRange.start, dayRange.end, 10);
-  const dayExtremes = tideExtremes(dayCurve);
-  const currentHeight = tideHeight(forecast.now, state.profile);
-  const nextHeight = tideHeight(new Date(forecast.now.getTime() + 10 * 60000), state.profile);
+  const dayCurve = tideCurveForRange(dayRange, 10);
+  const dayExtremes = tideExtremesForRange(dayRange, dayCurve);
+  const currentHeight = tideHeightForDate(forecast.now);
+  const nextHeight = tideHeightForDate(new Date(forecast.now.getTime() + 10 * 60000));
   const trend = tideTrendLabel(currentHeight, nextHeight);
   const lows = dayExtremes.filter((extreme) => extreme.type === "low").sort((a, b) => a.timeMs - b.timeMs);
   const highs = dayExtremes.filter((extreme) => extreme.type === "high").sort((a, b) => a.timeMs - b.timeMs);
 
-  els.todayTidesDate.textContent = `(${formatDate(forecast.now, state.profile.timezone)})`;
+  els.todayTidesDate.textContent = `(${formatDate(forecast.now, state.profile.timezone, getLocale())})`;
   els.currentTideState.textContent =
-    `${tideTrendSymbol(trend)} ${trend} (${formatMetres(currentHeight)}) at ${formatTime(forecast.now, state.profile.timezone)} local time`;
+    t("summary.currentTideState", {
+      symbol: tideTrendSymbol(trend),
+      trend: t(`trend.${trend}`),
+      height: formatMetres(currentHeight),
+      time: formatTime(forecast.now, state.profile.timezone, getLocale())
+    });
   els.todayLowTides.textContent = lows.length ? lows.map(formatEventTimeHeight).join("   ") : "--";
   els.todayHighTides.textContent = highs.length ? highs.map(formatEventTimeHeight).join("   ") : "--";
 }
 
 function tideTrendLabel(currentHeight, nextHeight) {
   const delta = nextHeight - currentHeight;
-  if (!Number.isFinite(delta) || Math.abs(delta) < 0.005) return "Slack";
-  return delta > 0 ? "Flooding" : "Ebbing";
+  if (!Number.isFinite(delta) || Math.abs(delta) < 0.005) return "slack";
+  return delta > 0 ? "flooding" : "ebbing";
 }
 
 function tideTrendSymbol(trend) {
@@ -383,7 +1063,7 @@ function tideTrendSymbol(trend) {
 function renderHarvestSummary(nextHarvest, forecast) {
   const harvestWindow = nextHarvestWindow(forecast, nextHarvest);
   if (!harvestWindow) {
-    resetHarvestSummary("No harvest window in range");
+    resetHarvestSummary(t("summary.noHarvestWindow"));
     return;
   }
 
@@ -392,22 +1072,22 @@ function renderHarvestSummary(nextHarvest, forecast) {
   const lowestLow = lowestLowBetween(harvestWindow.start, harvestWindow.end);
 
   els.harvestWindow.textContent =
-    `${formatDate(harvestWindow.start, state.profile.timezone)} - ${formatDate(harvestWindow.end, state.profile.timezone)}`;
-  els.harvestStartLabel.textContent = `Low Tide ${formatDayMonth(harvestWindow.start)}:`;
+    `${formatDate(harvestWindow.start, state.profile.timezone, getLocale())} - ${formatDate(harvestWindow.end, state.profile.timezone, getLocale())}`;
+  els.harvestStartLabel.textContent = t("summary.lowTideDate", { date: formatDayMonth(harvestWindow.start) });
   els.harvestStartLow.textContent = startLow ? formatEventTimeHeight(startLow) : "--";
   els.harvestLowestLow.textContent = lowestLow
     ? `${formatMetres(lowestLow.heightM)} (${formatDayMonth(lowestLow.date)})`
     : "--";
-  els.harvestEndLabel.textContent = `Low Tide ${formatDayMonth(harvestWindow.end)}:`;
+  els.harvestEndLabel.textContent = t("summary.lowTideDate", { date: formatDayMonth(harvestWindow.end) });
   els.harvestEndLow.textContent = endLow ? formatEventTimeHeight(endLow) : "--";
 }
 
 function resetHarvestSummary(message) {
   els.harvestWindow.textContent = message;
-  els.harvestStartLabel.textContent = "Low Tide:";
+  els.harvestStartLabel.textContent = t("summary.lowTide");
   els.harvestStartLow.textContent = "--";
   els.harvestLowestLow.textContent = "--";
-  els.harvestEndLabel.textContent = "Low Tide:";
+  els.harvestEndLabel.textContent = t("summary.lowTide");
   els.harvestEndLow.textContent = "--";
 }
 
@@ -456,18 +1136,19 @@ function lowestLowForLocalDay(date) {
 }
 
 function lowestLowBetween(startDate, endDate) {
-  const curve = tideCurve(state.profile, startDate, endDate, 10);
-  const lows = tideExtremes(curve).filter((extreme) => extreme.type === "low");
+  const range = { start: startDate, end: endDate };
+  const curve = tideCurveForRange(range, 10);
+  const lows = tideExtremesForRange(range, curve).filter((extreme) => extreme.type === "low");
   if (!lows.length) return null;
   return lows.reduce((lowest, low) => (low.heightM < lowest.heightM ? low : lowest), lows[0]);
 }
 
 function formatEventTimeHeight(extreme) {
-  return `${formatTime(extreme.date, state.profile.timezone)} (${formatMetres(extreme.heightM)})`;
+  return `${formatTime(extreme.date, state.profile.timezone, getLocale())} (${formatMetres(extreme.heightM)})`;
 }
 
 function formatDayMonth(date) {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(getLocale(), {
     timeZone: state.profile.timezone,
     day: "numeric",
     month: "long"
@@ -475,7 +1156,7 @@ function formatDayMonth(date) {
 }
 
 function formatDayMonthShort(date) {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(getLocale(), {
     timeZone: state.profile.timezone,
     day: "numeric",
     month: "short"
@@ -488,10 +1169,10 @@ function renderMoon(now) {
   const nextFull = nextMoonEvent(now, 0.5);
 
   els.moonPhaseSymbol.textContent = moonPhaseSymbol(phase);
-  els.moonPhase.textContent = moonPhaseName(phase);
-  els.moonIllumination.textContent = `${formatPercent(moonIllumination(phase))} illuminated`;
-  els.nextNewMoon.textContent = formatDateTime(nextNew, state.profile.timezone);
-  els.nextFullMoon.textContent = formatDateTime(nextFull, state.profile.timezone);
+  els.moonPhase.textContent = t(`moonPhase.${moonPhaseName(phase)}`);
+  els.moonIllumination.textContent = t("moon.illuminated", { percent: formatPercent(moonIllumination(phase)) });
+  els.nextNewMoon.textContent = formatDateTime(nextNew, state.profile.timezone, getLocale());
+  els.nextFullMoon.textContent = formatDateTime(nextFull, state.profile.timezone, getLocale());
   renderSolarTimes(now);
 }
 
@@ -511,8 +1192,8 @@ function renderSolarTimes(now) {
   }
 
   const times = solarTimes(now, coordinates.lat, coordinates.lon, state.profile.timezone);
-  els.sunriseTime.textContent = times.sunrise ? formatTime(times.sunrise, state.profile.timezone) : "--";
-  els.sunsetTime.textContent = times.sunset ? formatTime(times.sunset, state.profile.timezone) : "--";
+  els.sunriseTime.textContent = times.sunrise ? formatTime(times.sunrise, state.profile.timezone, getLocale()) : "--";
+  els.sunsetTime.textContent = times.sunset ? formatTime(times.sunset, state.profile.timezone, getLocale()) : "--";
 }
 
 function solarCoordinatesForSelection() {
@@ -623,6 +1304,7 @@ function renderCharts(forecast) {
 
   renderTideChart(els.tideChart7d, forecast.weekCurve, forecast.weekExtremes, {
     timeZone: state.profile.timezone,
+    locale: getLocale(),
     thresholdEnabled: state.thresholdEnabled,
     thresholdM: state.thresholdM,
     now: forecast.now,
@@ -648,6 +1330,7 @@ function renderCharts(forecast) {
 
   renderTideChart(els.tideChartOverview, forecast.overviewCurve, forecast.overviewExtremes, {
     timeZone: state.profile.timezone,
+    locale: getLocale(),
     thresholdEnabled: state.thresholdEnabled,
     thresholdM: state.thresholdM,
     now: forecast.now,
@@ -674,17 +1357,17 @@ function renderOverviewHarvestWindowSummary(windows) {
   if (!els.overviewHarvestWindows) return;
 
   if (!state.thresholdEnabled) {
-    els.overviewHarvestWindows.innerHTML = `<span>Harvest threshold hidden.</span>`;
+    els.overviewHarvestWindows.innerHTML = `<span>${escapeHtml(t("harvest.thresholdHiddenSentence"))}</span>`;
     return;
   }
 
   if (!windows.length) {
-    els.overviewHarvestWindows.innerHTML = `<span>No harvest windows in this ${state.overviewMonths}-month range.</span>`;
+    els.overviewHarvestWindows.innerHTML = `<span>${escapeHtml(t("harvest.noWindowsInRange", { months: state.overviewMonths }))}</span>`;
     return;
   }
 
   els.overviewHarvestWindows.innerHTML = `
-    <strong>Harvest windows:</strong>
+    <strong>${escapeHtml(t("harvest.windows"))}</strong>
     ${windows.map((window) => `<span class="harvest-window-chip">${escapeHtml(formatHarvestWindowRange(window))}</span>`).join("")}
   `;
 }
@@ -724,8 +1407,9 @@ function buildHarvestDayRanges(startDate, endDate, profile, thresholdM, enabled)
     const dayStart = zonedDateKeyToDate(dateKey, profile.timezone);
     const nextDateKey = addDaysToDateKey(dateKey, 1);
     const dayEnd = new Date(zonedDateKeyToDate(nextDateKey, profile.timezone).getTime() - 60000);
-    const curve = tideCurve(profile, dayStart, dayEnd, 30);
-    const lows = tideExtremes(curve).filter((extreme) => extreme.type === "low");
+    const dayRange = { start: dayStart, end: dayEnd };
+    const curve = tideCurveForRange(dayRange, 30);
+    const lows = tideExtremesForRange(dayRange, curve).filter((extreme) => extreme.type === "low");
     const lowest = lows.reduce((min, low) => Math.min(min, low.heightM), Infinity);
 
     if (lowest <= thresholdM) {
@@ -800,10 +1484,13 @@ function renderLowTides() {
     86400000 * 1.1
   );
 
-  els.lowTideRangeLabel.textContent = `next ${state.lowListDays} days`;
+  els.lowTideRangeLabel.textContent = t("table.nextDays", { days: state.lowListDays });
+  if (els.loadMoreLows) {
+    els.loadMoreLows.textContent = t("table.loadMore", { days: 14 });
+  }
 
   if (!dailyRows.length || !upcomingLows.length) {
-    els.lowTideList.innerHTML = `<tr><td colspan="6" class="empty-state">No tide events found in this range.</td></tr>`;
+    els.lowTideList.innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(t("table.empty"))}</td></tr>`;
     return;
   }
 
@@ -817,7 +1504,7 @@ function renderLowTides() {
 
     return `
       <tr class="${rowClass}">
-        <td>${escapeHtml(formatDate(row.date, state.profile.timezone))}</td>
+        <td>${escapeHtml(formatDate(row.date, state.profile.timezone, getLocale()))}</td>
         <td class="high-tide-cell">${formatTidePeriodCell(row.highMorning)}</td>
         <td class="high-tide-cell">${formatTidePeriodCell(row.highAfternoon)}</td>
         <td class="low-tide-cell">${formatTidePeriodCell(row.lowMorning)}</td>
@@ -835,8 +1522,8 @@ function buildDailyTideRows(startDate, dayCount) {
   for (let offset = 0; offset < dayCount; offset += 1) {
     const dateKey = addDaysToDateKey(startKey, offset);
     const dayRange = localDayRange(dateKey, state.profile.timezone);
-    const dayCurve = tideCurve(state.profile, dayRange.start, dayRange.end, 10);
-    const extremes = tideExtremes(dayCurve).sort((a, b) => a.timeMs - b.timeMs);
+    const dayCurve = tideCurveForRange(dayRange, 10);
+    const extremes = tideExtremesForRange(dayRange, dayCurve).sort((a, b) => a.timeMs - b.timeMs);
     const highs = extremes.filter((extreme) => extreme.type === "high").slice(0, 2);
     const lows = extremes.filter((extreme) => extreme.type === "low").slice(0, 2);
     const highMorning = highs.filter(isMorningTideEvent);
@@ -874,7 +1561,7 @@ function formatTidePeriodCell(extremes) {
 
 function formatTideTableCell(extreme) {
   if (!extreme) return `<span class="muted-cell">--</span>`;
-  return `<span class="tide-event-cell"><span class="tide-event-time">${escapeHtml(formatTime(extreme.date, state.profile.timezone))}</span> <span class="tide-event-height">(${escapeHtml(formatCompactMetres(extreme.heightM))})</span></span>`;
+  return `<span class="tide-event-cell"><span class="tide-event-time">${escapeHtml(formatTime(extreme.date, state.profile.timezone, getLocale()))}</span> <span class="tide-event-height">(${escapeHtml(formatCompactMetres(extreme.heightM))})</span></span>`;
 }
 
 function formatCompactMetres(value) {
@@ -933,7 +1620,7 @@ function renderLowTideStatus(isHarvest, isSpringLow, moon, windowInfo) {
 
   if (isMobileView()) {
     if (isHarvest && isSpringLow) {
-      return `${moonText}<span class="spring-low" title="${escapeAttribute(`Spring low - ${harvestText}`)}">${escapeHtml(SYMBOLS.plant)}${escapeHtml(SYMBOLS.down)}</span>`;
+      return `${moonText}<span class="spring-low" title="${escapeAttribute(t("harvest.springLow", { harvestText }))}">${escapeHtml(SYMBOLS.plant)}${escapeHtml(SYMBOLS.down)}</span>`;
     }
 
     if (isHarvest) {
@@ -944,7 +1631,7 @@ function renderLowTideStatus(isHarvest, isSpringLow, moon, windowInfo) {
   }
 
   if (isHarvest && isSpringLow) {
-    return `${moonText}<span class="spring-low">${escapeHtml(SYMBOLS.plant)} Spring low - ${escapeHtml(harvestText)} ${escapeHtml(SYMBOLS.down)}</span>`;
+    return `${moonText}<span class="spring-low">${escapeHtml(SYMBOLS.plant)} ${escapeHtml(t("harvest.springLow", { harvestText }))} ${escapeHtml(SYMBOLS.down)}</span>`;
   }
 
   if (isHarvest) {
@@ -959,11 +1646,11 @@ function renderLowTideStatus(isHarvest, isSpringLow, moon, windowInfo) {
 }
 
 function harvestStatusText(windowInfo) {
-  if (!windowInfo) return "Harvest";
-  if (windowInfo.role === "single") return `Harvest day (${windowInfo.label})`;
-  if (windowInfo.role === "start") return `Harvest start (${windowInfo.label})`;
-  if (windowInfo.role === "end") return `Harvest end (${windowInfo.label})`;
-  return `Harvest window (${windowInfo.label})`;
+  if (!windowInfo) return t("harvest.status");
+  if (windowInfo.role === "single") return t("harvest.day", { label: windowInfo.label });
+  if (windowInfo.role === "start") return t("harvest.start", { label: windowInfo.label });
+  if (windowInfo.role === "end") return t("harvest.end", { label: windowInfo.label });
+  return t("harvest.windowLabel", { label: windowInfo.label });
 }
 
 function moonSymbol(type) {
@@ -977,7 +1664,7 @@ function renderCalendar(forecast) {
 
   els.harvestCalendar.innerHTML = months.map((monthStartKey) => {
     const monthDate = dateKeyToUtcDate(monthStartKey);
-    const monthLabel = formatMonth(monthDate, state.profile.timezone);
+    const monthLabel = formatMonth(monthDate, state.profile.timezone, getLocale());
     const blanks = (weekdayIndex(monthStartKey) + 6) % 7;
     const totalDays = daysInMonth(monthStartKey);
     const cells = [];
@@ -1012,7 +1699,7 @@ function renderCalendar(forecast) {
       <section class="calendar-month" aria-label="${escapeHtml(monthLabel)}">
         <h3>${escapeHtml(monthLabel)}</h3>
         <div class="calendar-grid calendar-head">
-          <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
+          <span>${escapeHtml(t("calendar.weekday.mon"))}</span><span>${escapeHtml(t("calendar.weekday.tue"))}</span><span>${escapeHtml(t("calendar.weekday.wed"))}</span><span>${escapeHtml(t("calendar.weekday.thu"))}</span><span>${escapeHtml(t("calendar.weekday.fri"))}</span><span>${escapeHtml(t("calendar.weekday.sat"))}</span><span>${escapeHtml(t("calendar.weekday.sun"))}</span>
         </div>
         <div class="calendar-grid">${cells.join("")}</div>
       </section>
@@ -1037,7 +1724,7 @@ function buildHarvestDays(extremes, moons) {
   for (const moon of moons) {
     const dateKey = localDateKey(moon.date, state.profile.timezone);
     const current = dayMap.get(dateKey) || { lows: [], harvest: false, minLow: Infinity, moonType: "" };
-    current.moonLabel = moon.type === "full" ? "Full" : "New";
+    current.moonLabel = moon.type === "full" ? t("moon.full") : t("moon.new");
     current.moonType = moon.type;
     dayMap.set(dateKey, current);
   }
@@ -1047,32 +1734,63 @@ function buildHarvestDays(extremes, moons) {
 
 function buildCalendarTitle(dateKey, info) {
   const bits = [dateKey];
-  if (info?.harvest) bits.push(`harvest low, min ${formatMetres(info.minLow)}`);
-  if (info?.moonLabel) bits.push(`${info.moonLabel} moon`);
+  if (info?.harvest) bits.push(t("calendar.harvestLowTitle", { height: formatMetres(info.minLow) }));
+  if (info?.moonLabel) bits.push(t("calendar.moonTitle", { moon: info.moonLabel }));
   return bits.join(" - ");
 }
 
 function renderSourceDetails() {
   const { profile, location } = state;
+  const tideData = activeTideData();
+  const dataset = tideData?.dataset;
+  const verification = dataset?.verification_status
+    ? translateStatusLabel(dataset.verification_status)
+    : translateDataText(profile.verificationLabel);
   els.sourceDetails.innerHTML = `
-    <div><strong>Source:</strong> <a href="${escapeAttribute(profile.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(profile.sourceName)}</a></div>
-    <div><strong>Tide profile:</strong> ${escapeHtml(profile.name)}</div>
-    <div><strong>Datum:</strong> ${escapeHtml(profile.datumLabel)}</div>
-    <div><strong>Timezone:</strong> ${escapeHtml(profile.timezone)}</div>
-    <div><strong>Verification:</strong> ${escapeHtml(profile.verificationLabel)}</div>
-    <div><strong>Location note:</strong> ${escapeHtml(location.notes)}</div>
+    <div><strong>${escapeHtml(t("details.dataset"))}</strong> ${escapeHtml(translateDataText(dataset?.dataset_name || profile.version))}</div>
+    <div><strong>${escapeHtml(t("details.source"))}</strong> <a href="${escapeAttribute(dataset?.source_url || profile.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(translateDataText(dataset?.source_organization || dataset?.source_title || profile.sourceName))}</a></div>
+    <div><strong>${escapeHtml(t("details.datum"))}</strong> ${escapeHtml(translateDataText(dataset?.datum_label || profile.datumLabel))}</div>
+    <div><strong>${escapeHtml(t("details.timezone"))}</strong> ${escapeHtml(profile.timezone)}</div>
+    <div><strong>${escapeHtml(t("details.verification"))}</strong> ${escapeHtml(verification)}</div>
+    <div><strong>${escapeHtml(t("details.locationNote"))}</strong> ${escapeHtml(translateDataText(location.notes))}</div>
   `;
+}
+
+function activeTideDataLabel(tideData) {
+  if (tideData?.sourceType === "supabase") return t("data.active.supabase");
+  if (tideData?.sourceType === "offline") return t("data.active.offline");
+  if (state.tideDataStatus === "loading") return t("data.active.loading");
+  return t("data.active.prototype");
 }
 
 function renderSafetyDetails() {
   els.safetyDetails.innerHTML = `
-    <p>${escapeHtml(state.profile.warningText)}</p>
-    <p>This prototype is planning guidance only. Local weather, currents, access conditions, datum differences, and unverified datasets can change field safety. Do not use this as navigation-grade tide data.</p>
+    <p>${escapeHtml(translateDataText(state.profile.warningText))}</p>
+    <p>${escapeHtml(t("safety.prototypeWarning"))}</p>
   `;
 }
 
 function getLocation(locationKey) {
-  return tideLocations.find((location) => location.key === locationKey) || null;
+  const normalizedKey = canonicalLocationSlug(locationKey);
+  if (!normalizedKey) return null;
+
+  return allKnownLocations().find((location) => {
+    return locationIdentifierCandidates(location).some((candidate) => {
+      return canonicalLocationSlug(candidate) === normalizedKey;
+    });
+  }) || null;
+}
+
+function locationIdentifierCandidates(location) {
+  return [
+    location?.key,
+    location?.databaseKey,
+    location?.locationCode,
+    location?.id,
+    location?.shortName,
+    location?.name,
+    ...(Array.isArray(location?.aliases) ? location.aliases : [])
+  ];
 }
 
 function getDefaultThreshold(location, profile) {
@@ -1103,6 +1821,20 @@ function saveThresholdState() {
   writeStorage(thresholdEnabledStorageKey(), String(state.thresholdEnabled));
 }
 
+function normalizeLocationSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function canonicalLocationSlug(value) {
+  const normalized = normalizeLocationSlug(value);
+  return LEGACY_LOCATION_KEY_ALIASES[normalized] || normalized;
+}
+
 function syncThresholdControls() {
   els.thresholdInput.value = state.thresholdM.toFixed(2);
   els.thresholdEnabled.checked = state.thresholdEnabled;
@@ -1111,12 +1843,13 @@ function syncThresholdControls() {
 
 function syncForecastRangeControls() {
   if (els.forecastRangeLabel) {
-    els.forecastRangeLabel.textContent = `${state.forecastDays}-Day Tide Forecast`;
+    els.forecastRangeLabel.textContent = t("forecast.rangeLabel", { days: state.forecastDays });
   }
 
   els.forecastRangeButtons.forEach((button) => {
     const isSelected = Number(button.dataset.forecastDays) === state.forecastDays;
     button.setAttribute("aria-pressed", String(isSelected));
+    button.textContent = t("forecast.buttonDays", { count: button.dataset.forecastDays });
   });
 }
 
@@ -1124,13 +1857,18 @@ function syncOverviewRangeControls() {
   syncOverviewVisibility();
 
   if (els.overviewRangeLabel) {
-    const suffix = isMobileView() ? "" : " & Harvest Windows";
-    els.overviewRangeLabel.textContent = `${state.overviewMonths}-Month Tide Overview${suffix}`;
+    const suffix = isMobileView() ? "" : t("overview.suffixHarvest");
+    els.overviewRangeLabel.textContent = t("overview.rangeLabel", {
+      months: state.overviewMonths,
+      suffix
+    });
   }
 
   els.overviewRangeButtons.forEach((button) => {
     const isSelected = Number(button.dataset.overviewMonths) === state.overviewMonths;
     button.setAttribute("aria-pressed", String(isSelected));
+    const count = Number(button.dataset.overviewMonths);
+    button.textContent = t(count === 1 ? "overview.buttonMonth" : "overview.buttonMonths", { count });
   });
 }
 

@@ -7,6 +7,7 @@ import {
   localDateKey,
   startOfMonthKey
 } from "./tide_format.js";
+import { getLocale, t } from "./language.js?v=20260615-admin-observations";
 
 const COLORS = {
   line: "#3b82f6",
@@ -159,7 +160,7 @@ export function renderTideChart(canvas, curve, extremes, options = {}) {
       ctx.lineTo(nowX, pad.top + plotH);
       ctx.stroke();
       ctx.restore();
-      drawText(ctx, "Now", nowX + 5, pad.top + 10, { color: COLORS.now, size: options.tickLabelSize || 11 });
+      drawText(ctx, t("chart.now"), nowX + 5, pad.top + 10, { color: COLORS.now, size: options.tickLabelSize || 11 });
     }
   }
 
@@ -210,8 +211,8 @@ function drawGrid(ctx, width, height, pad, minH, maxH, x, y, minTime, maxTime, o
 
     const labelDate = new Date(t);
     const label = options.compact
-      ? formatDate(labelDate, options.timeZone)
-      : formatDateTime(labelDate, options.timeZone);
+      ? formatDate(labelDate, options.timeZone, chartLocale(options))
+      : formatDateTime(labelDate, options.timeZone, chartLocale(options));
     const align = i === 0 ? "left" : i === tickCount ? "right" : "center";
     drawText(ctx, label, xx, height - 16, { align, color: COLORS.axis, size: options.tickLabelSize || 10 });
   }
@@ -235,7 +236,7 @@ function drawHalfDayTimeGrid(ctx, width, height, pad, x, minTime, maxTime, timeZ
     ctx.stroke();
 
     const align = xx - pad.left < 34 ? "left" : width - pad.right - xx < 34 ? "right" : "center";
-    drawText(ctx, isDayStart ? formatDate(new Date(tick.timeMs), timeZone) : "12:00", xx, height - 19, {
+    drawText(ctx, isDayStart ? formatDate(new Date(tick.timeMs), timeZone, chartLocale(options)) : "12:00", xx, height - 19, {
       align,
       color: COLORS.axis,
       size: options.tickLabelSize || 10,
@@ -301,7 +302,7 @@ function drawMonthTimeGrid(ctx, width, height, pad, x, minTime, maxTime, timeZon
         ctx.lineTo(midX, height - pad.bottom);
         ctx.stroke();
         ctx.setLineDash([]);
-        drawText(ctx, formatMidMonthLabel(new Date(midMonth), zone), midX, height - 29, {
+        drawText(ctx, formatMidMonthLabel(new Date(midMonth), zone, chartLocale(options)), midX, height - 29, {
           align: "center",
           color: COLORS.axis,
           size: options.tickLabelSize ? Math.max(8, options.tickLabelSize - 1) : 9
@@ -309,7 +310,7 @@ function drawMonthTimeGrid(ctx, width, height, pad, x, minTime, maxTime, timeZon
       }
 
       const labelX = x(visibleStart + (visibleEnd - visibleStart) / 2);
-      drawText(ctx, formatMonthLabel(new Date(visibleStart + (visibleEnd - visibleStart) / 2), zone), labelX, height - 14, {
+      drawText(ctx, formatMonthLabel(new Date(visibleStart + (visibleEnd - visibleStart) / 2), zone, chartLocale(options)), labelX, height - 14, {
         align: "center",
         color: COLORS.axis,
         size: options.axisLabelSize || 11,
@@ -355,15 +356,15 @@ function drawMonthBackgroundBands(ctx, pad, plotW, plotH, x, minTime, maxTime, t
   ctx.restore();
 }
 
-function formatMonthLabel(date, timeZone) {
-  return new Intl.DateTimeFormat("en-GB", {
+function formatMonthLabel(date, timeZone, locale) {
+  return new Intl.DateTimeFormat(locale, {
     timeZone,
     month: "long"
   }).format(date);
 }
 
-function formatMidMonthLabel(date, timeZone) {
-  return new Intl.DateTimeFormat("en-GB", {
+function formatMidMonthLabel(date, timeZone, locale) {
+  return new Intl.DateTimeFormat(locale, {
     timeZone,
     day: "numeric",
     month: "short"
@@ -394,7 +395,7 @@ function drawThresholdLine(ctx, pad, plotW, thresholdY, threshold, options = {})
   }
 
   const outsideLeft = options.thresholdLabelPosition === "left-of-axis";
-  drawText(ctx, `\u2264 ${Number(threshold).toFixed(2)}m harvest`, outsideLeft ? pad.left - 10 : pad.left + 8, thresholdY - 8, {
+  drawText(ctx, t("chart.thresholdHarvest", { value: Number(threshold).toFixed(2) }), outsideLeft ? pad.left - 10 : pad.left + 8, thresholdY - 8, {
     align: outsideLeft ? "right" : "left",
     color: COLORS.threshold,
     size: 11,
@@ -674,7 +675,7 @@ function drawExtremes(ctx, markers, options) {
     }
 
     if (showLabels && !compact && isLow) {
-      drawText(ctx, formatTime(marker.extreme.date, options.timeZone || "UTC"), marker.x, marker.y + 12, {
+      drawText(ctx, formatTime(marker.extreme.date, options.timeZone || "UTC", chartLocale(options)), marker.x, marker.y + 12, {
         align: "center",
         color: COLORS.low,
         size: 10,
@@ -715,10 +716,10 @@ function drawActiveReadout(ctx, point, state) {
 }
 
 function drawTooltip(ctx, point, xPos, yPos, width, height, options) {
-  const title = point.type === "high" ? "High tide" : point.type === "low" ? "Low tide" : "Tide height";
+  const title = point.type === "high" ? t("chart.tooltipHigh") : point.type === "low" ? t("chart.tooltipLow") : t("chart.tooltipHeight");
   const lines = [
     title,
-    formatDateTime(new Date(point.timeMs), options.timeZone || "UTC"),
+    formatDateTime(new Date(point.timeMs), options.timeZone || "UTC", chartLocale(options)),
     `${Number(point.heightM).toFixed(2)} m`
   ];
   const fontSize = options.compact ? 10 : 11;
@@ -824,11 +825,15 @@ function updateInteraction(canvas, event, preferExtreme) {
 
   if (!point) return;
 
-  canvas.title = `${formatDateTime(new Date(point.timeMs), state.options.timeZone || "UTC")} - ${Number(point.heightM).toFixed(2)} m`;
+  canvas.title = `${formatDateTime(new Date(point.timeMs), state.options.timeZone || "UTC", chartLocale(state.options))} - ${Number(point.heightM).toFixed(2)} m`;
   renderTideChart(canvas, state.curve, state.extremes, {
     ...state.options,
     activePoint: point
   });
+}
+
+function chartLocale(options = {}) {
+  return options.locale || getLocale();
 }
 
 function canvasPointer(event, canvas) {

@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js?v=20260611-public-reads";
+import { APP_CONFIG } from "./config.js?v=20260612-location-identifiers";
 import { TIDE_LOCATIONS } from "../data/locations.js";
 import { TIDE_PROFILES } from "../data/tide_profiles.js";
 
@@ -8,6 +8,21 @@ const DATASET_PROFILE_MAP = {
   kpa_2026_kilindini: "kenya_mombasa_reference",
   fremantle_reference: "fremantle_reference"
 };
+const TIDE_REFERENCE_REGION_BY_DATASET = {
+  kmfri_2026_lamu: "Lamu County",
+  kmfri_2026_mombasa: "Mombasa County",
+  kpa_2026_kilindini: "Mombasa County",
+  kpa_2026_dar_es_salaam: "Dar es Salaam Region"
+};
+const TIDE_REFERENCE_REGION_BY_LOCATION = {
+  lamu: "Lamu County",
+  mombasa: "Mombasa County",
+  kilindini: "Mombasa County",
+  dar_es_salaam: "Dar es Salaam Region",
+  "dar-es-salaam": "Dar es Salaam Region"
+};
+const PUBLIC_FARM_LOCATION_CACHE_KEY = "seaweed_tide_planner:public_farm_locations:v1";
+const PUBLIC_TIDE_REFERENCE_CACHE_KEY = "seaweed_tide_planner:public_tide_references:v1";
 
 export function getLocations() {
   return TIDE_LOCATIONS;
@@ -33,11 +48,99 @@ export async function fetchSupabaseTable(tableName, query = "select=*") {
     throw new Error("Supabase reads are configured but not enabled yet.");
   }
 
+  return fetchSupabaseJson(tableName, query);
+}
+
+export async function fetchSupabaseTablePaged(tableName, query = "select=*", pageSize = 1000) {
+  if (!canReadSupabase()) {
+    throw new Error("Supabase reads are configured but not enabled yet.");
+  }
+
+  const rows = [];
+  let start = 0;
+
+  while (true) {
+    const page = await fetchSupabaseJson(tableName, `${query}&limit=${pageSize}&offset=${start}`);
+    rows.push(...page);
+
+    if (page.length < pageSize) break;
+    start += pageSize;
+  }
+
+  return rows;
+}
+
+export async function loadPublicTideDatasetBundle(datasetRef, options = {}) {
+  const datasetFilter = resolveDatasetFilter(datasetRef, options);
+  if (!datasetFilter || !canReadSupabase()) {
+    return emptyDatasetBundle(datasetRef, "Supabase public reads are unavailable.");
+  }
+
+  const fromDate = options.fromDate ? encodeURIComponent(options.fromDate) : "";
+  const toDate = options.toDate ? encodeURIComponent(options.toDate) : "";
+  const dateFilter = fromDate && toDate ? `&local_date=gte.${fromDate}&local_date=lte.${toDate}` : "";
+
+  try {
+    const [datasetRows, tideEvents, hourlyPredictions] = await Promise.all([
+      fetchSupabaseTable(
+        "tide_datasets",
+        `select=*&${datasetFilter.datasetQuery}&active=eq.true&public_visible=eq.true&limit=1`
+      ),
+      fetchSupabaseTablePaged(
+        "tide_events",
+        `select=dataset_id,dataset_key,event_time_utc,local_date,local_time,event_type,height_m,quality_flag,source_event_id,source_pdf_page,notes&${datasetFilter.rawQuery}${dateFilter}&order=event_time_utc.asc`
+      ),
+      fetchSupabaseTablePaged(
+        "tide_hourly_predictions",
+        `select=dataset_id,dataset_key,prediction_time_utc,local_date,local_time,local_hour,height_m,quality_flag,source_record_id,source_pdf_page,notes&${datasetFilter.rawQuery}${dateFilter}&order=prediction_time_utc.asc`
+      )
+    ]);
+
+    return {
+      dataset: datasetRows[0] || null,
+      tideEvents,
+      hourlyPredictions,
+      source: "supabase",
+      warning: datasetRows.length ? "" : `No public tide_datasets row found for ${datasetFilter.label}.`
+    };
+  } catch (error) {
+    console.warn("Tide dataset bundle read failed.", error);
+    return emptyDatasetBundle(datasetRef, error.message || "Tide dataset bundle read failed.");
+  }
+}
+
+function resolveDatasetFilter(datasetRef, options = {}) {
+  const datasetId = options.datasetId || (isUuid(datasetRef) ? datasetRef : "");
+  const datasetKey = options.datasetKey || (!isUuid(datasetRef) ? datasetRef : "");
+
+  if (datasetId) {
+    const encoded = encodeURIComponent(datasetId);
+    return {
+      label: datasetId,
+      datasetQuery: `id=eq.${encoded}`,
+      rawQuery: `dataset_id=eq.${encoded}`
+    };
+  }
+
+  if (datasetKey) {
+    const encoded = encodeURIComponent(datasetKey);
+    return {
+      label: datasetKey,
+      datasetQuery: `dataset_key=eq.${encoded}`,
+      rawQuery: `dataset_key=eq.${encoded}`
+    };
+  }
+
+  return null;
+}
+
+async function fetchSupabaseJson(tableName, query, extraHeaders = {}) {
   const path = `${APP_CONFIG.supabase.restUrl}/${encodeURIComponent(tableName)}?${query}`;
   const response = await fetch(path, {
     headers: {
       apikey: APP_CONFIG.supabase.anonKey,
-      Authorization: `Bearer ${APP_CONFIG.supabase.anonKey}`
+      Authorization: `Bearer ${APP_CONFIG.supabase.anonKey}`,
+      ...extraHeaders
     }
   });
 
@@ -46,6 +149,16 @@ export async function fetchSupabaseTable(tableName, query = "select=*") {
   }
 
   return response.json();
+}
+
+function emptyDatasetBundle(datasetKey, warning) {
+  return {
+    dataset: null,
+    tideEvents: [],
+    hourlyPredictions: [],
+    source: "none",
+    warning: warning || `No public tide data loaded for ${datasetKey || "selected dataset"}.`
+  };
 }
 
 export async function loadPublicFarmLocations() {
@@ -64,17 +177,27 @@ export async function loadPublicFarmLocations() {
       "farm_locations",
       "select=*&active=eq.true&public_visible=eq.true&order=farm_name.asc"
     );
-    const locations = rows.map(normalizeSupabaseFarmLocation).filter(Boolean);
+    const locations = applyLocationUrlKeys(rows.map(normalizeSupabaseFarmLocation).filter(Boolean));
 
     if (locations.length) {
+      writeJsonCache(PUBLIC_FARM_LOCATION_CACHE_KEY, locations);
       return {
         locations,
-        sourceLabel: "Using Supabase farm_locations",
+        sourceLabel: "",
         source: "supabase"
       };
     }
   } catch (error) {
     console.warn("Farm location read failed, using static locations.", error);
+  }
+
+  const cachedLocations = readJsonCache(PUBLIC_FARM_LOCATION_CACHE_KEY);
+  if (Array.isArray(cachedLocations) && cachedLocations.length) {
+    return {
+      locations: cachedLocations,
+      sourceLabel: "Using cached farm location records",
+      source: "cache"
+    };
   }
 
   return {
@@ -99,13 +222,27 @@ export async function loadPublicTideReferences() {
       "select=*&active=eq.true&public_visible=eq.true&order=dataset_name.asc"
     );
 
+    const references = rows.map(normalizeSupabaseTideReference).filter(Boolean);
+    if (references.length) {
+      writeJsonCache(PUBLIC_TIDE_REFERENCE_CACHE_KEY, references);
+    }
+
     return {
-      references: rows.map(normalizeSupabaseTideReference).filter(Boolean),
-      sourceLabel: "Using Supabase tide_datasets",
+      references,
+      sourceLabel: "",
       source: "supabase"
     };
   } catch (error) {
     console.warn("Tide reference read failed.", error);
+  }
+
+  const cachedReferences = readJsonCache(PUBLIC_TIDE_REFERENCE_CACHE_KEY);
+  if (Array.isArray(cachedReferences) && cachedReferences.length) {
+    return {
+      references: cachedReferences,
+      sourceLabel: "Using cached tide references",
+      source: "cache"
+    };
   }
 
   return {
@@ -116,16 +253,28 @@ export async function loadPublicTideReferences() {
 }
 
 function normalizeSupabaseFarmLocation(row) {
-  const key = row.farm_location_key || row.location_code || row.id;
+  const databaseKey = row.farm_location_key || "";
+  const preferredKey = normalizeLocationSlug(row.short_name || row.farm_name || databaseKey || row.location_code || row.id);
+  const key = preferredKey || databaseKey || row.location_code || row.id;
   if (!key) return null;
 
   const latitude = toFiniteNumber(row.latitude);
   const longitude = toFiniteNumber(row.longitude);
+  const datasetId = row.default_tide_dataset_id || "";
   const datasetKey = row.default_tide_dataset_key || "kmfri_2026_mombasa";
+  const aliases = uniqueValues([
+    databaseKey,
+    row.location_code,
+    row.id,
+    normalizeLocationSlug(row.farm_name),
+    normalizeLocationSlug(row.short_name)
+  ]);
 
   return {
     key,
     id: row.id || null,
+    databaseKey,
+    aliases,
     locationCode: row.location_code || "",
     name: row.farm_name || row.short_name || key,
     shortName: row.short_name || row.farm_name || key,
@@ -133,6 +282,7 @@ function normalizeSupabaseFarmLocation(row) {
     country: row.country || "Kenya",
     timezone: "Africa/Nairobi",
     tideProfileKey: DATASET_PROFILE_MAP[datasetKey] || "kenya_mombasa_reference",
+    defaultTideDatasetId: datasetId,
     defaultTideDatasetKey: datasetKey,
     defaultHarvestThresholdM: Number(row.default_harvest_threshold_m ?? 0.7),
     gps: Number.isFinite(latitude) && Number.isFinite(longitude)
@@ -146,30 +296,116 @@ function normalizeSupabaseFarmLocation(row) {
   };
 }
 
+function applyLocationUrlKeys(locations) {
+  const preferredCounts = locations.reduce((counts, location) => {
+    counts.set(location.key, (counts.get(location.key) || 0) + 1);
+    return counts;
+  }, new Map());
+
+  return locations.map((location) => {
+    if (preferredCounts.get(location.key) === 1) return location;
+
+    const farmNameKey = normalizeLocationSlug(location.name);
+    const key = farmNameKey && preferredCounts.get(farmNameKey) !== 1
+      ? farmNameKey
+      : (location.databaseKey || location.id || location.key);
+
+    return {
+      ...location,
+      key,
+      aliases: uniqueValues([...(location.aliases || []), location.key])
+    };
+  });
+}
+
 function normalizeSupabaseTideReference(row) {
-  const key = row.dataset_key || row.id;
+  const key = row.id || row.dataset_key;
   if (!key) return null;
+
+  const datasetKey = row.dataset_key || "";
+  const latitude = toFiniteNumber(row.tide_location_latitude);
+  const longitude = toFiniteNumber(row.tide_location_longitude);
 
   return {
     key,
+    id: row.id || null,
+    datasetKey,
     name: row.tide_location_name || row.dataset_name || key,
     datasetName: row.dataset_name || key,
     sourceName: row.source_organization || row.source_title || "Tide dataset",
     sourceUrl: row.source_url || "",
-    latitude: toFiniteNumber(row.tide_location_latitude),
-    longitude: toFiniteNumber(row.tide_location_longitude),
+    latitude,
+    longitude,
+    region: tideReferenceRegion(row),
+    country: row.tide_location_country || row.location_country || "",
+    gps: Number.isFinite(latitude) && Number.isFinite(longitude)
+      ? { lat: latitude, lon: longitude }
+      : null,
     datumLabel: row.datum_label || "",
     status: row.verification_status || "",
-    timezone: row.timezone || "Africa/Nairobi"
+    timezone: row.timezone || "Africa/Nairobi",
+    tideProfileKey: DATASET_PROFILE_MAP[datasetKey] || "kenya_mombasa_reference",
+    defaultHarvestThresholdM: Number(row.default_harvest_threshold_m ?? row.harvest_threshold_m ?? 0.7)
   };
+}
+
+function tideReferenceRegion(row) {
+  const datasetKey = row.dataset_key || "";
+  const locationKey = row.tide_location_key || row.location_key || "";
+  return (
+    row.tide_location_region ||
+    row.location_region ||
+    TIDE_REFERENCE_REGION_BY_DATASET[datasetKey] ||
+    TIDE_REFERENCE_REGION_BY_LOCATION[locationKey] ||
+    ""
+  );
 }
 
 function canReadSupabase() {
   return APP_CONFIG.supabase.enabled === true || APP_CONFIG.supabase.publicReadsEnabled === true;
 }
 
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
 function toFiniteNumber(value) {
   if (value === null || value === undefined || value === "") return NaN;
   const number = Number(value);
   return Number.isFinite(number) ? number : NaN;
+}
+
+function normalizeLocationSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function readJsonCache(key) {
+  if (typeof window === "undefined" || !window.localStorage) return null;
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.warn("Public data cache read failed.", error);
+    return null;
+  }
+}
+
+function writeJsonCache(key, value) {
+  if (typeof window === "undefined" || !window.localStorage) return;
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn("Public data cache write failed.", error);
+  }
 }
