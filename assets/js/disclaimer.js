@@ -1,4 +1,4 @@
-import { t } from "./language.js?v=20260615-kmd-weather-alerts";
+import { t } from "./language.js?v=20260615-dataset-import-merge";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
 

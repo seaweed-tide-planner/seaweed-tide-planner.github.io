@@ -3,6 +3,7 @@ import { APP_CONFIG } from "./config.js";
 const TABLES = {
   locations: "farm_locations",
   datasets: "tide_datasets",
+  datasetSummary: "tide_dataset_summary",
   adminUsers: "tide_admin_users",
   calibrationRecords: "location_tide_calibrations",
   calibrationSummary: "location_tide_calibration_admin_summary"
@@ -12,6 +13,7 @@ const AUTH_SESSION_KEY = "seaweed_tide_planner:admin_auth_session";
 const LANGUAGE_SETTINGS_KEY = "seaweed_tide_planner:admin_language_status";
 const NEW_LOCATION_ID = "__new_location__";
 const NEW_DATASET_ID = "__new_dataset__";
+const RAW_IMPORT_BATCH_SIZE = 450;
 const LOCATION_TABLE_VIEWS = {
   metadata: [
     "Location ID",
@@ -38,6 +40,28 @@ const LOCATION_TABLE_VIEWS = {
     "Action"
   ]
 };
+const DATASET_TABLE_VIEWS = {
+  metadata: [
+    "Dataset ID",
+    "Name",
+    "Location name",
+    "Region",
+    "Location coordinates",
+    "Source name",
+    "Verification",
+    "Dataset use",
+    "Action"
+  ],
+  importer: [
+    "Dataset ID",
+    "Name",
+    "Coverage dates",
+    "Hourly rows",
+    "Event rows",
+    "# Linked farms",
+    "Linked data"
+  ]
+};
 
 const DATASET_STATUSES = [
   "imported_unverified",
@@ -46,6 +70,43 @@ const DATASET_STATUSES = [
   "superseded",
   "rejected"
 ];
+const REQUIRED_IMPORT_COLUMNS = {
+  hourly: ["prediction_time_utc", "local_date", "local_time", "local_hour", "height_m"],
+  events: ["event_time_utc", "local_date", "local_time", "event_type", "height_m"]
+};
+const RAW_IMPORT_FIELDS = {
+  hourly: [
+    "dataset_id",
+    "dataset_key",
+    "prediction_time_utc",
+    "local_date",
+    "local_time",
+    "local_hour",
+    "height_m",
+    "source_record_id",
+    "source_pdf_page",
+    "source_row_text",
+    "quality_flag",
+    "notes"
+  ],
+  events: [
+    "dataset_id",
+    "dataset_key",
+    "event_time_utc",
+    "local_date",
+    "local_time",
+    "event_type",
+    "height_m",
+    "source_event_id",
+    "source_pdf_page",
+    "source_row_text",
+    "derived_from_hourly",
+    "quality_flag",
+    "notes"
+  ]
+};
+const RAW_NUMBER_FIELDS = new Set(["height_m", "local_hour", "source_pdf_page"]);
+const RAW_BOOLEAN_FIELDS = new Set(["derived_from_hourly"]);
 
 const state = {
   locations: [],
@@ -57,9 +118,12 @@ const state = {
   hasLocationDraft: false,
   hasDatasetDraft: false,
   locationTableView: "metadata",
+  datasetTableView: "metadata",
   editingLocationId: null,
   editingDatasetId: null,
   selectedCalibrationId: null,
+  selectedDatasetId: "",
+  importPreview: null,
   requestedCalibrationLocationId: ""
 };
 
@@ -107,11 +171,24 @@ function cacheElements() {
     "locationsTableBody",
     "locationMetadataView",
     "locationCalibrationView",
+    "datasetsTableHead",
     "datasetsTableBody",
+    "datasetMetadataView",
+    "datasetImporterView",
     "reloadLocations",
     "reloadDatasets",
     "newLocation",
     "newDataset",
+    "selectedImportTarget",
+    "importWriteStatusPill",
+    "importPreviewForm",
+    "hourlyCsvInput",
+    "eventsCsvInput",
+    "replaceExistingRows",
+    "runSupabaseImport",
+    "clearImportPreview",
+    "importPreviewStatus",
+    "importPreviewResults",
     "adminUserCount",
     "adminUsersStatus",
     "adminUsersTableBody",
@@ -160,6 +237,13 @@ function bindEvents() {
       setLocationTableView(button.dataset.locationTableView);
     });
   });
+  document.querySelectorAll("[data-dataset-table-view]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setDatasetTableView(button.dataset.datasetTableView);
+    });
+  });
 
   document.querySelectorAll("[data-language-status]").forEach((select) => {
     select.addEventListener("change", saveLanguageSettings);
@@ -182,6 +266,7 @@ function bindEvents() {
       setStatus(els.datasetSaveStatus, "Sign in before adding a dataset.", "error");
       return;
     }
+    state.datasetTableView = "metadata";
     state.hasDatasetDraft = true;
     state.editingDatasetId = NEW_DATASET_ID;
     renderDatasets();
@@ -232,9 +317,32 @@ function bindEvents() {
     }
 
     const button = event.target.closest("[data-save-dataset]");
-    if (!button) return;
-    await saveDatasetRow(button.closest("tr"));
+    if (button) {
+      await saveDatasetRow(button.closest("tr"));
+      return;
+    }
+
+    const importButton = event.target.closest("[data-select-import-dataset]");
+    if (importButton) {
+      selectDatasetForImport(importButton.dataset.selectImportDataset, { scroll: true });
+    }
   });
+
+  els.selectedImportTarget?.addEventListener("change", (event) => {
+    if (event.target.id !== "selectedImportDatasetSelect") return;
+    selectDatasetForImport(event.target.value);
+  });
+
+  els.importPreviewForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await previewCsvFiles();
+  });
+
+  els.runSupabaseImport?.addEventListener("click", async () => {
+    await importPreviewToSupabase();
+  });
+
+  els.clearImportPreview?.addEventListener("click", () => clearImportPreview(true));
 
   els.adminUsersTableBody?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-save-admin-user]");
@@ -300,13 +408,48 @@ async function loadLocations(options = {}) {
 
 async function loadDatasets(options = {}) {
   if (!options.quiet) setStatus(els.datasetSaveStatus, "Loading tide datasets...");
-  state.datasets = await supabaseSelect(TABLES.datasets, "select=*&order=dataset_key.asc");
+  state.datasets = await loadDatasetRows();
   state.hasDatasetDraft = false;
   state.editingDatasetId = null;
+  if (state.selectedDatasetId && !state.datasets.some((dataset) => dataset.id === state.selectedDatasetId)) {
+    state.selectedDatasetId = "";
+  }
   renderDatasets();
+  renderSelectedImportTarget();
   renderCalibrationPanel();
   renderDashboardMetrics();
-  if (!options.quiet) setStatus(els.datasetSaveStatus, `Loaded ${state.datasets.length} dataset row(s).`);
+  if (!options.quiet) setStatus(els.datasetSaveStatus, datasetLoadMessage());
+}
+
+async function loadDatasetRows() {
+  try {
+    const rows = await supabaseSelect(TABLES.datasetSummary, "select=*&order=dataset_name.asc");
+    return rows.map((row) => normalizeDatasetRow(row, true));
+  } catch {
+    const rows = await supabaseSelect(TABLES.datasets, "select=*&order=dataset_key.asc");
+    return rows.map((row) => normalizeDatasetRow(row, false));
+  }
+}
+
+function normalizeDatasetRow(row, summaryAvailable) {
+  const id = row.id || row.dataset_id;
+  const hourlyRowCount = Number(row.hourly_row_count || 0);
+  const eventRowCount = Number(row.event_row_count || 0);
+  const hasHourly = row.has_hourly_predictions === true || hourlyRowCount > 0;
+  const hasEvents = row.has_tide_events === true || eventRowCount > 0;
+  return {
+    ...row,
+    id,
+    dataset_id: id,
+    hourly_row_count: hourlyRowCount,
+    event_row_count: eventRowCount,
+    linked_farm_count: Number(row.linked_farm_count || 0),
+    has_hourly_predictions: hasHourly,
+    has_tide_events: hasEvents,
+    has_raw_data: row.has_raw_data === true || hasHourly || hasEvents,
+    raw_data_status: row.raw_data_status || rawDataStatusFromFlags(hasHourly, hasEvents),
+    summaryAvailable
+  };
 }
 
 async function loadCalibrations(options = {}) {
@@ -569,15 +712,54 @@ function renderLocationCalibrationRow(row, index, rowId, rowClass) {
 function renderDatasets() {
   const rows = state.hasDatasetDraft ? [defaultDataset(), ...state.datasets] : state.datasets;
   if (!els.datasetCount || !els.datasetsTableBody) return;
+  renderDatasetTableHead();
+  updateDatasetTableViewButtons();
   els.datasetCount.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"}`;
 
   if (!rows.length) {
-    els.datasetsTableBody.innerHTML = emptyRow(10, "No visible tide datasets returned from Supabase.");
+    els.datasetsTableBody.innerHTML = emptyRow(datasetTableColumnCount(), "No visible tide datasets returned from Supabase.");
     return;
   }
 
   let displayIndex = 0;
   els.datasetsTableBody.innerHTML = rows.map((row) => renderDatasetRow(row, row.id ? displayIndex++ : -1)).join("");
+}
+
+function renderDatasetTableHead() {
+  if (!els.datasetsTableHead) return;
+  const headings = DATASET_TABLE_VIEWS[state.datasetTableView] || DATASET_TABLE_VIEWS.metadata;
+  els.datasetsTableHead.innerHTML = `
+    <tr>
+      ${headings.map((heading, index) => `<th${index === headings.length - 1 && state.datasetTableView === "metadata" ? " data-admin-only" : ""}>${escapeHtml(heading)}</th>`).join("")}
+    </tr>
+  `;
+  els.datasetsTableHead.closest("table")?.setAttribute("data-view", state.datasetTableView);
+}
+
+function datasetTableColumnCount() {
+  return (DATASET_TABLE_VIEWS[state.datasetTableView] || DATASET_TABLE_VIEWS.metadata).length;
+}
+
+function updateDatasetTableViewButtons() {
+  document.querySelectorAll("[data-dataset-table-view]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.datasetTableView === state.datasetTableView));
+  });
+}
+
+function setDatasetTableView(view) {
+  if (!DATASET_TABLE_VIEWS[view]) return;
+  state.datasetTableView = view;
+  if (view === "importer" && state.editingDatasetId === NEW_DATASET_ID) {
+    state.hasDatasetDraft = false;
+  }
+  state.editingDatasetId = null;
+  renderDatasets();
+  setStatus(
+    els.datasetSaveStatus,
+    view === "importer"
+      ? "Showing importer data from the dataset summary view."
+      : "Showing tide dataset metadata."
+  );
 }
 
 function renderCalibrationPanel() {
@@ -695,7 +877,16 @@ function renderDatasetRow(row, index) {
   const isNew = !row.id;
   const rowId = isNew ? NEW_DATASET_ID : row.id;
   const isEditing = rowId === state.editingDatasetId;
-  const rowClass = [isNew ? "draft-row" : "", isEditing ? "editing-row" : ""].filter(Boolean).join(" ");
+  const isSelected = row.id && row.id === state.selectedDatasetId;
+  const rowClass = [isNew ? "draft-row" : "", isEditing || isSelected ? "editing-row" : ""].filter(Boolean).join(" ");
+  if (state.datasetTableView === "importer") {
+    return renderDatasetImporterRow(row, index, rowId, rowClass);
+  }
+  return renderDatasetMetadataRow(row, index, rowId, rowClass, isEditing);
+}
+
+function renderDatasetMetadataRow(row, index, rowId, rowClass, isEditing) {
+  const isNew = !row.id;
   const region = datasetRegionValue(row);
 
   if (!isEditing) {
@@ -706,7 +897,6 @@ function renderDatasetRow(row, index) {
         <td>${readOnlyCell(row.tide_location_name)}</td>
         <td>${readOnlyCell(region)}</td>
         <td>${readOnlyCell(formatCoordinatePair(row.tide_location_latitude, row.tide_location_longitude))}</td>
-        <td>${readOnlyCell(formatDateRange(row.valid_from, row.valid_to))}</td>
         <td>${readOnlyCell(row.source_organization || row.source_title)}</td>
         <td>${readOnlyCell(formatStatus(row.verification_status))}</td>
         <td>${readOnlyCell(recordUseLabel(row))}</td>
@@ -727,16 +917,26 @@ function renderDatasetRow(row, index) {
         ${numberInput("tide_location_latitude", row.tide_location_latitude, "latitude", "-90", "90", "0.000001")}
         ${numberInput("tide_location_longitude", row.tide_location_longitude, "longitude", "-180", "180", "0.000001")}
       </div></td>
-      <td><div class="inline-editor-pair">
-        ${dateInput("valid_from", row.valid_from)}
-        ${dateInput("valid_to", row.valid_to)}
-      </div></td>
       <td>${textInput("source_organization", row.source_organization, "source name")}</td>
       <td>${selectInput("verification_status", row.verification_status || "imported_unverified", DATASET_STATUSES.map((value) => [value, formatStatus(value)]))}</td>
       <td>${selectInput("dataset_use", recordUseValue(row), recordUseOptions())}</td>
       <td class="save-cell" data-admin-only>
         <button type="button" data-save-dataset ${state.authSession ? "" : "disabled"}>${isNew ? "Create" : "Save"}</button>
       </td>
+    </tr>
+  `;
+}
+
+function renderDatasetImporterRow(row, index, rowId, rowClass) {
+  return `
+    <tr data-row-id="${escapeAttribute(rowId)}" data-row-kind="dataset" class="${rowClass}">
+      <td class="id-cell">${datasetIdCell(row, index)}</td>
+      <td>${readOnlyCell(row.dataset_name)}</td>
+      <td>${readOnlyCell(dataCoverageLabel(row))}</td>
+      <td>${readOnlyCell(formatInteger(row.hourly_row_count))}</td>
+      <td>${readOnlyCell(formatInteger(row.event_row_count))}</td>
+      <td>${readOnlyCell(formatInteger(row.linked_farm_count))}</td>
+      <td>${readOnlyCell(rawDataStatusLabel(row.raw_data_status))}</td>
     </tr>
   `;
 }
@@ -793,6 +993,9 @@ async function saveDatasetRow(rowElement) {
     const tideLocationName = requiredText(rowValue(rowElement, "tide_location_name"), "Tide location name");
     const tideLocationRegion = requiredText(rowValue(rowElement, "tide_location_region") || datasetRegionValue(current), "Location region");
     const datasetUse = rowValue(rowElement, "dataset_use");
+    const year = yearFromDate(current.valid_from) || new Date().getFullYear();
+    const validFrom = rowHasField(rowElement, "valid_from") ? requiredText(rowValue(rowElement, "valid_from"), "Valid from") : current.valid_from || `${year}-01-01`;
+    const validTo = rowHasField(rowElement, "valid_to") ? requiredText(rowValue(rowElement, "valid_to"), "Valid to") : current.valid_to || `${year}-12-31`;
     const payload = {
       dataset_key: current.dataset_key || normalizeDatasetKey(datasetName),
       dataset_name: datasetName,
@@ -806,9 +1009,9 @@ async function saveDatasetRow(rowElement) {
       tide_location_longitude: nullableNumber(rowValue(rowElement, "tide_location_longitude")),
       timezone: current.timezone || "Africa/Nairobi",
       datum_label: current.datum_label || "Metres above lowest astronomical tide",
-      prediction_year: current.prediction_year || yearFromDate(rowValue(rowElement, "valid_from")),
-      valid_from: requiredText(rowValue(rowElement, "valid_from"), "Valid from"),
-      valid_to: requiredText(rowValue(rowElement, "valid_to"), "Valid to"),
+      prediction_year: current.prediction_year || yearFromDate(validFrom),
+      valid_from: validFrom,
+      valid_to: validTo,
       verification_status: rowValue(rowElement, "verification_status") || "imported_unverified",
       has_hourly_predictions: current.has_hourly_predictions === true,
       has_tide_events: current.has_tide_events === true,
@@ -831,6 +1034,510 @@ async function saveDatasetRow(rowElement) {
   } catch (error) {
     setStatus(els.datasetSaveStatus, writeErrorMessage(error), "error");
   }
+}
+
+function selectDatasetForImport(datasetId, options = {}) {
+  const dataset = state.datasets.find((row) => row.id === datasetId);
+  if (!dataset) {
+    setStatus(els.importPreviewStatus, "Could not select dataset for import.", "error");
+    return;
+  }
+
+  state.selectedDatasetId = dataset.id;
+  clearImportPreview(false);
+  renderDatasets();
+  renderSelectedImportTarget();
+  setStatus(els.importPreviewStatus, `${dataset.dataset_name} selected for raw CSV import.`);
+  if (options.scroll) {
+    els.selectedImportTarget?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => els.hourlyCsvInput?.focus(), 250);
+  }
+}
+
+function selectedImportDataset() {
+  return state.datasets.find((dataset) => dataset.id === state.selectedDatasetId) || null;
+}
+
+function renderSelectedImportTarget() {
+  if (!els.selectedImportTarget) return;
+  const dataset = selectedImportDataset();
+  if (els.runSupabaseImport) els.runSupabaseImport.disabled = true;
+  state.importPreview = null;
+
+  if (!dataset) {
+    if (els.importWriteStatusPill) {
+      els.importWriteStatusPill.textContent = "Select dataset";
+      els.importWriteStatusPill.className = "status-pill status-muted";
+    }
+    els.selectedImportTarget.className = "selected-import-target empty-state";
+    els.selectedImportTarget.innerHTML = renderDatasetSelectControl("");
+    return;
+  }
+
+  const rawStatus = rawDataStatusLabel(dataset.raw_data_status);
+  if (els.importWriteStatusPill) {
+    els.importWriteStatusPill.textContent = rawStatus;
+    els.importWriteStatusPill.className = `status-pill ${dataset.has_raw_data ? "" : "status-muted"}`.trim();
+  }
+  els.selectedImportTarget.className = "selected-import-target";
+  els.selectedImportTarget.innerHTML = renderDatasetSelectControl(dataset.id);
+}
+
+function renderDatasetSelectControl(selectedId) {
+  return `
+    <label class="selected-import-select">
+      Selected dataset
+      <select id="selectedImportDatasetSelect" ${state.datasets.length ? "" : "disabled"}>
+        ${state.datasets.length
+          ? [
+              `<option value=""${selectedId ? "" : " selected"}>Select dataset</option>`,
+              ...state.datasets.map((dataset) => `
+            <option value="${escapeAttribute(dataset.id)}"${dataset.id === selectedId ? " selected" : ""}>
+              ${escapeHtml(datasetSelectLabel(dataset))}
+            </option>
+          `)
+            ].join("")
+          : `<option value="">No datasets loaded</option>`}
+      </select>
+    </label>
+  `;
+}
+
+function datasetSelectLabel(dataset) {
+  return `${datasetDisplayId(dataset, datasetIndex(dataset))} - ${dataset.dataset_name || "Unnamed dataset"}`;
+}
+
+async function previewCsvFiles() {
+  if (!state.authSession) {
+    setStatus(els.importPreviewStatus, "Sign in as an active admin before previewing imports.", "error");
+    return;
+  }
+
+  const dataset = selectedImportDataset();
+  if (!dataset) {
+    setStatus(els.importPreviewStatus, "Select a dataset before previewing CSVs.", "error");
+    return;
+  }
+
+  try {
+    setStatus(els.importPreviewStatus, "Reading CSV files...");
+    if (els.runSupabaseImport) els.runSupabaseImport.disabled = true;
+    state.importPreview = null;
+
+    const hourly = els.hourlyCsvInput?.files[0]
+      ? await readCsvFile(els.hourlyCsvInput.files[0], "hourly", REQUIRED_IMPORT_COLUMNS.hourly)
+      : null;
+    const events = els.eventsCsvInput?.files[0]
+      ? await readCsvFile(els.eventsCsvInput.files[0], "events", REQUIRED_IMPORT_COLUMNS.events)
+      : null;
+
+    if (!hourly && !events) {
+      throw new Error("Select at least one raw tide CSV: hourly predictions, tide events, or both.");
+    }
+
+    const issues = [];
+    const notes = [];
+    const blocks = [];
+    let hourlyRows = [];
+    let eventRows = [];
+
+    if (hourly) {
+      const split = splitRowsForDataset(hourly.rows, dataset);
+      hourlyRows = split.rows;
+      if (split.skipped) notes.push(`Hourly predictions: ${formatInteger(split.skipped)} row(s) for other dataset IDs/keys will be skipped.`);
+      if (!split.rows.length) issues.push(`Hourly predictions: no rows match ${dataset.dataset_name || dataset.id}.`);
+      issues.push(...validateRawPreview("Hourly predictions", split.rows, dataset, ["prediction_time_utc"]));
+      issues.push(...validateHeights("Hourly predictions", split.rows));
+      blocks.push(renderPreviewBlock("Hourly predictions", hourly, summarizeRawRows(split.rows, "prediction_time_utc", dataset), split.skipped));
+    }
+
+    if (events) {
+      const split = splitRowsForDataset(events.rows, dataset);
+      eventRows = split.rows;
+      if (split.skipped) notes.push(`Tide events: ${formatInteger(split.skipped)} row(s) for other dataset IDs/keys will be skipped.`);
+      if (!split.rows.length) issues.push(`Tide events: no rows match ${dataset.dataset_name || dataset.id}.`);
+      issues.push(...validateRawPreview("Tide events", split.rows, dataset, ["event_time_utc", "event_type"]));
+      issues.push(...validateHeights("Tide events", split.rows));
+      issues.push(...validateEventTypes(split.rows));
+      blocks.push(renderPreviewBlock("Tide events", events, summarizeRawRows(split.rows, "event_time_utc", dataset), split.skipped));
+    }
+
+    state.importPreview = {
+      datasetId: dataset.id,
+      datasetKey: dataset.dataset_key,
+      hourlyRows,
+      eventRows,
+      issues
+    };
+    if (els.runSupabaseImport) els.runSupabaseImport.disabled = !!issues.length;
+
+    els.importPreviewResults.innerHTML = `
+      ${issues.length ? renderIssueList(issues) : `<div class="empty-state success-state">Preview checks passed for ${escapeHtml(dataset.dataset_name || dataset.id)}. Click Import to Supabase when ready.</div>`}
+      ${notes.length ? renderNoteList(notes) : ""}
+      <div class="import-preview-grid">${blocks.join("")}</div>
+    `;
+
+    setStatus(
+      els.importPreviewStatus,
+      issues.length ? `${issues.length} issue(s) found. Fix the CSVs before import.` : "Preview complete. CSVs are ready to import.",
+      issues.length ? "error" : ""
+    );
+  } catch (error) {
+    if (els.importPreviewResults) els.importPreviewResults.innerHTML = "";
+    if (els.runSupabaseImport) els.runSupabaseImport.disabled = true;
+    state.importPreview = null;
+    setStatus(els.importPreviewStatus, error.message, "error");
+  }
+}
+
+async function importPreviewToSupabase() {
+  const dataset = selectedImportDataset();
+  const preview = state.importPreview;
+
+  if (!state.authSession) {
+    setStatus(els.importPreviewStatus, "Sign in as an active admin before importing.", "error");
+    return;
+  }
+  if (!dataset || !preview || preview.datasetId !== dataset.id) {
+    setStatus(els.importPreviewStatus, "Preview the CSVs for the selected dataset before importing.", "error");
+    return;
+  }
+  if (preview.issues.length) {
+    setStatus(els.importPreviewStatus, "Fix preview issues before importing.", "error");
+    return;
+  }
+  if (!preview.hourlyRows.length && !preview.eventRows.length) {
+    setStatus(els.importPreviewStatus, "There are no previewed rows to import.", "error");
+    return;
+  }
+
+  try {
+    if (els.runSupabaseImport) els.runSupabaseImport.disabled = true;
+    setStatus(els.importPreviewStatus, "Importing raw tide rows to Supabase...");
+
+    if (els.replaceExistingRows?.checked) {
+      if (preview.hourlyRows.length) await deleteExistingRawRows("tide_hourly_predictions", dataset);
+      if (preview.eventRows.length) await deleteExistingRawRows("tide_events", dataset);
+    }
+
+    if (preview.hourlyRows.length) {
+      const rows = prepareRowsForImport(preview.hourlyRows, dataset, "hourly");
+      await upsertRawRows("tide_hourly_predictions", rows, "dataset_id,prediction_time_utc", "dataset_key,prediction_time_utc");
+    }
+
+    if (preview.eventRows.length) {
+      const rows = prepareRowsForImport(preview.eventRows, dataset, "events");
+      await upsertRawRows("tide_events", rows, "dataset_id,event_time_utc,event_type", "dataset_key,event_time_utc,event_type");
+    }
+
+    await markDatasetImportFlags(dataset, {
+      hourly: preview.hourlyRows.length > 0,
+      events: preview.eventRows.length > 0
+    });
+
+    await loadDatasets({ quiet: true });
+    setStatus(
+      els.importPreviewStatus,
+      `Imported ${formatInteger(preview.hourlyRows.length)} hourly row(s) and ${formatInteger(preview.eventRows.length)} event row(s). Dataset summary refreshed.`
+    );
+    els.importPreviewResults.insertAdjacentHTML(
+      "afterbegin",
+      `<div class="empty-state success-state">Import complete. The Tide datasets table now reflects the Supabase summary view where available.</div>`
+    );
+  } catch (error) {
+    if (els.runSupabaseImport) els.runSupabaseImport.disabled = false;
+    setStatus(els.importPreviewStatus, writeErrorMessage(error), "error");
+  }
+}
+
+async function readCsvFile(file, label, requiredColumns) {
+  if (!file) throw new Error(`${label} CSV is required.`);
+  const text = await file.text();
+  const parsed = parseCsv(text);
+  if (!parsed.length) throw new Error(`${label} CSV is empty.`);
+  const headers = parsed[0].map((header) => header.trim().replace(/^\uFEFF/, ""));
+  const missing = requiredColumns.filter((column) => !headers.includes(column));
+  if (missing.length) {
+    throw new Error(`${label} CSV is missing required columns: ${missing.join(", ")}`);
+  }
+
+  const rows = parsed.slice(1)
+    .filter((values) => values.some((value) => String(value || "").trim()))
+    .map((values, index) => {
+      const row = { _csvRow: index + 2 };
+      headers.forEach((header, columnIndex) => {
+        row[header] = values[columnIndex] === undefined ? "" : String(values[columnIndex]).trim();
+      });
+      return row;
+    });
+
+  return {
+    label,
+    fileName: file.name,
+    headers,
+    rows
+  };
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let value = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      value += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      row.push(value);
+      value = "";
+    } else if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(value);
+      rows.push(row);
+      row = [];
+      value = "";
+    } else {
+      value += char;
+    }
+  }
+
+  if (value.length || row.length) {
+    row.push(value);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function splitRowsForDataset(rows, dataset) {
+  const selectedRows = [];
+  let skipped = 0;
+
+  rows.forEach((row) => {
+    if (row.dataset_id && row.dataset_id !== dataset.id) {
+      skipped += 1;
+      return;
+    }
+    if (row.dataset_key && row.dataset_key !== dataset.dataset_key) {
+      skipped += 1;
+      return;
+    }
+    selectedRows.push(row);
+  });
+
+  return { rows: selectedRows, skipped };
+}
+
+function validateRawPreview(label, rows, dataset, uniqueFields) {
+  const issues = [];
+  const seen = new Set();
+
+  rows.forEach((row) => {
+    const uniqueKey = [dataset.id, ...uniqueFields.map((field) => row[field])].join("|");
+    if (seen.has(uniqueKey)) {
+      issues.push(`${label} duplicate row key: ${uniqueKey}`);
+    }
+    seen.add(uniqueKey);
+  });
+
+  return issues;
+}
+
+function validateHeights(label, rows) {
+  return rows
+    .filter((row) => row.height_m !== "" && !Number.isFinite(Number(row.height_m)))
+    .map((row) => `${label} row ${row._csvRow} has invalid height_m: ${row.height_m}`);
+}
+
+function validateEventTypes(rows) {
+  return rows
+    .filter((row) => !["high", "low"].includes(String(row.event_type || "").toLowerCase()))
+    .map((row) => `Tide events row ${row._csvRow} has invalid event_type: ${row.event_type || "(blank)"}`);
+}
+
+function summarizeRawRows(rows, timeField, dataset) {
+  const dates = [];
+  const heights = [];
+
+  rows.forEach((row) => {
+    if (row.local_date) dates.push(row.local_date);
+    if (row.height_m !== "") heights.push(Number(row.height_m));
+  });
+
+  const finiteHeights = heights.filter(Number.isFinite);
+  const sortedDates = dates.slice().sort();
+  const firstDate = sortedDates.length ? sortedDates[0] : "";
+  const lastDate = sortedDates.length ? sortedDates[sortedDates.length - 1] : "";
+
+  return [{
+    key: dataset.id,
+    count: rows.length,
+    range: formatDateRange(firstDate, lastDate),
+    detail: finiteHeights.length
+      ? `${Math.min(...finiteHeights).toFixed(3)} to ${Math.max(...finiteHeights).toFixed(3)} m`
+      : "height range unavailable",
+    timeField
+  }];
+}
+
+function renderPreviewBlock(title, fileResult, summaryRows, skippedCount) {
+  return `
+    <article class="import-preview-card">
+      <h3>${escapeHtml(title)}</h3>
+      <p class="field-hint">${escapeHtml(fileResult.fileName)} - ${formatInteger(fileResult.rows.length)} source row(s)${skippedCount ? `, ${formatInteger(skippedCount)} skipped` : ""}</p>
+      <table class="mini-table">
+        <thead>
+          <tr>
+            <th>Dataset ID</th>
+            <th>Rows</th>
+            <th>Range</th>
+            <th>Height range</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryRows.map((row) => `
+            <tr>
+              <td>${escapeHtml(shortId(row.key))}</td>
+              <td>${escapeHtml(formatInteger(row.count))}</td>
+              <td>${escapeHtml(row.range)}</td>
+              <td>${escapeHtml(row.detail)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </article>
+  `;
+}
+
+function renderIssueList(issues) {
+  return `
+    <div class="empty-state error-state">
+      <strong>Fix before import</strong>
+      <ul class="check-list">
+        ${issues.map((issue) => `<li>${escapeHtml(issue)}</li>`).join("")}
+      </ul>
+    </div>
+  `;
+}
+
+function renderNoteList(notes) {
+  return `
+    <div class="empty-state">
+      <strong>Import notes</strong>
+      <ul class="check-list">
+        ${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}
+      </ul>
+    </div>
+  `;
+}
+
+function prepareRowsForImport(rows, dataset, rowType) {
+  const fields = RAW_IMPORT_FIELDS[rowType];
+  return rows.map((row) => {
+    const prepared = {
+      dataset_id: dataset.id,
+      dataset_key: dataset.dataset_key
+    };
+
+    fields.forEach((field) => {
+      if (field === "dataset_id" || field === "dataset_key") return;
+      if (!Object.prototype.hasOwnProperty.call(row, field)) return;
+      prepared[field] = cleanImportValue(row[field], field);
+    });
+
+    return prepared;
+  });
+}
+
+function cleanImportValue(value, field) {
+  const text = String(value ?? "").trim();
+  if (text === "") return null;
+  if (RAW_BOOLEAN_FIELDS.has(field)) return parseBoolean(text);
+  if (RAW_NUMBER_FIELDS.has(field)) return Number(text);
+  if (field === "event_type") return text.toLowerCase();
+  return text;
+}
+
+function parseBoolean(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (["true", "t", "yes", "y", "1"].includes(text)) return true;
+  if (["false", "f", "no", "n", "0"].includes(text)) return false;
+  return null;
+}
+
+async function deleteExistingRawRows(table, dataset) {
+  try {
+    await supabaseRequest(`${table}?dataset_id=eq.${encodeURIComponent(dataset.id)}`, {
+      method: "DELETE",
+      prefer: "return=minimal",
+      requireAuth: true
+    });
+  } catch (error) {
+    if (!shouldRetryWithoutDatasetId(error)) throw error;
+    await supabaseRequest(`${table}?dataset_key=eq.${encodeURIComponent(dataset.dataset_key)}`, {
+      method: "DELETE",
+      prefer: "return=minimal",
+      requireAuth: true
+    });
+  }
+}
+
+async function upsertRawRows(table, rows, uuidConflict, legacyConflict) {
+  try {
+    await postRowsInBatches(table, rows, uuidConflict);
+  } catch (error) {
+    if (!shouldRetryWithoutDatasetId(error)) throw error;
+    const legacyRows = rows.map(({ dataset_id, ...row }) => row);
+    await postRowsInBatches(table, legacyRows, legacyConflict);
+  }
+}
+
+async function postRowsInBatches(table, rows, conflictColumns) {
+  for (let index = 0; index < rows.length; index += RAW_IMPORT_BATCH_SIZE) {
+    const batch = rows.slice(index, index + RAW_IMPORT_BATCH_SIZE);
+    const rangeLabel = `${formatInteger(index + 1)}-${formatInteger(index + batch.length)} of ${formatInteger(rows.length)}`;
+    setStatus(els.importPreviewStatus, `Uploading ${table}: ${rangeLabel}...`);
+    await supabaseRequest(`${table}?on_conflict=${conflictColumns}`, {
+      method: "POST",
+      body: batch,
+      prefer: "resolution=merge-duplicates,return=minimal",
+      requireAuth: true
+    });
+  }
+}
+
+async function markDatasetImportFlags(dataset, imported) {
+  const payload = {
+    has_hourly_predictions: imported.hourly || dataset.has_hourly_predictions === true,
+    has_tide_events: imported.events || dataset.has_tide_events === true,
+    imported_at: new Date().toISOString()
+  };
+
+  await supabaseRequest(`${TABLES.datasets}?id=eq.${encodeURIComponent(dataset.id)}`, {
+    method: "PATCH",
+    body: payload,
+    prefer: "return=minimal",
+    requireAuth: true
+  });
+}
+
+function clearImportPreview(clearFiles) {
+  if (clearFiles) els.importPreviewForm?.reset();
+  state.importPreview = null;
+  if (els.runSupabaseImport) els.runSupabaseImport.disabled = true;
+  if (els.importPreviewResults) els.importPreviewResults.innerHTML = "";
+  setStatus(els.importPreviewStatus, "");
+}
+
+function shouldRetryWithoutDatasetId(error) {
+  return /dataset_id|on_conflict|schema cache|unique or exclusion/i.test(error?.message || "");
 }
 
 async function saveAdminUserRow(rowElement) {
@@ -910,7 +1617,8 @@ async function supabaseRequest(path, options = {}) {
     }
 
     if (response.status === 204) return [];
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : [];
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error("Supabase request timed out. Reload the page or check the connection.");
@@ -1294,6 +2002,37 @@ function datasetDataFlags(row) {
   if (row.has_hourly_predictions) flags.push("Hourly");
   if (row.has_tide_events) flags.push("Events");
   return flags;
+}
+
+function dataCoverageLabel(dataset) {
+  return formatDateRange(dataset.first_data_local_date, dataset.last_data_local_date)
+    || formatDateRange(dataset.valid_from, dataset.valid_to)
+    || "No linked raw data";
+}
+
+function rawDataStatusFromFlags(hasHourly, hasEvents) {
+  if (hasHourly && hasEvents) return "hourly_and_events";
+  if (hasHourly) return "hourly_only";
+  if (hasEvents) return "events_only";
+  return "no_raw_data";
+}
+
+function rawDataStatusLabel(value) {
+  const text = String(value || "summary_not_applied");
+  if (text === "hourly_and_events") return "Hourly + events linked";
+  if (text === "hourly_only") return "Hourly rows linked";
+  if (text === "events_only") return "Event rows linked";
+  if (text === "no_raw_data") return "No raw data linked";
+  return formatStatus(text);
+}
+
+function datasetIndex(dataset) {
+  return state.datasets.findIndex((row) => row.id === dataset.id);
+}
+
+function formatInteger(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("en-GB") : "0";
 }
 
 function recordUseLabel(row, publicLabel = "Public") {

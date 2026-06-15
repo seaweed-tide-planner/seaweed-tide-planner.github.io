@@ -1,11 +1,11 @@
-import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260615-kmd-weather-alerts";
-import { t, translateDataText } from "./language.js?v=20260615-kmd-weather-alerts";
+import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260615-dataset-import-merge";
+import { t, translateDataText } from "./language.js?v=20260615-dataset-import-merge";
 import {
   isOfflineStorageSupported,
   listFarmLocationOfflineBundles
 } from "./offline_store.js?v=20260611-pwa-foundation";
 
-const TIDE_PAGE_VERSION = "20260615-kmd-weather-alerts";
+const TIDE_PAGE_VERSION = "20260615-dataset-import-merge";
 
 const KENYA_COAST_VIEW = {
   center: [-4.45, 39.45],

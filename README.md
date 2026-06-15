@@ -9,7 +9,8 @@ The first build is a static GitHub Pages-compatible web app. It is intentionally
 ```text
 index.html                         Tide planner entry point
 map.html                           Farm and tide-reference map
-importer.html                      Admin-gated dataset import preview page
+tide_datasets.html                 Admin dataset metadata, raw-data summary, and CSV import page
+importer.html                      Redirects old importer links to tide_datasets.html
 assets/css/                        App styling
 assets/js/                         Tide logic, formatting, charts, page controller
 assets/data/                       Static prototype data and tide profiles

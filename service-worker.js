@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260615-kmd-weather-alerts";
+const CACHE_VERSION = "20260615-dataset-import-merge";
 const SHELL_CACHE = `seaweed-tide-planner-shell-${CACHE_VERSION}`;
 const DATA_CACHE = "seaweed-tide-planner-data-v1";
 const MAP_TILE_CACHE = "seaweed-tide-planner-map-tiles-v1";
@@ -12,7 +12,6 @@ const SHELL_ASSETS = [
   "./tide_datasets.html",
   "./map.html",
   "./calibration.html",
-  "./importer.html",
   "./observation.html",
   "./offline.html",
   "./manifest.webmanifest",
@@ -33,7 +32,6 @@ const SHELL_ASSETS = [
   "./assets/js/calibration_page.js",
   "./assets/js/config.js",
   "./assets/js/disclaimer.js",
-  "./assets/js/importer_page_v2.js",
   "./assets/js/language.js",
   "./assets/js/map_page.js",
   "./assets/js/observation_form.js",
@@ -106,15 +104,12 @@ function shouldBypassCache(url) {
     "admin_settings.html",
     "calibration.html",
     "index.html",
-    "importer.html",
     "locations.html",
     "tide_datasets.html",
     "observation.html",
     "admin_page.js",
     "calibration_page.js",
     "disclaimer.js",
-    "importer_page.js",
-    "importer_page_v2.js",
     "language.js",
     "map.html",
     "map_page.js",

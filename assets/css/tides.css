@@ -1684,6 +1684,13 @@ main.importer-shell + .marine-disclaimer-footer {
   table-layout: fixed;
 }
 
+.tide-datasets-management-table {
+  min-width: 0;
+  width: max-content;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
 .admin-data-table th {
   padding: 6px;
 }
@@ -1699,22 +1706,28 @@ body:not(.admin-signed-in) [data-admin-only] {
 }
 
 .locations-management-table th,
-.locations-management-table td {
+.locations-management-table td,
+.tide-datasets-management-table th,
+.tide-datasets-management-table td {
   padding-block: 4px;
   padding-inline: 6px;
 }
 
-.locations-management-table td {
+.locations-management-table td,
+.tide-datasets-management-table td {
   min-width: 0;
 }
 
-.locations-management-table .id-cell {
+.locations-management-table .id-cell,
+.tide-datasets-management-table .id-cell {
   min-width: 0;
   max-width: none;
 }
 
 .locations-management-table .readonly-value,
-.locations-management-table .readonly-muted {
+.locations-management-table .readonly-muted,
+.tide-datasets-management-table .readonly-value,
+.tide-datasets-management-table .readonly-muted {
   min-width: 0;
   max-width: 100%;
   white-space: nowrap;
@@ -1801,6 +1814,70 @@ body:not(.admin-signed-in) [data-admin-only] {
 .locations-management-table[data-view="calibration"] th:nth-child(11),
 .locations-management-table[data-view="calibration"] td:nth-child(11) {
   width: 66px;
+}
+
+.tide-datasets-management-table th:nth-child(1),
+.tide-datasets-management-table td:nth-child(1) {
+  width: 82px;
+}
+
+.tide-datasets-management-table th:nth-child(2),
+.tide-datasets-management-table td:nth-child(2) {
+  width: 245px;
+}
+
+.tide-datasets-management-table th:nth-child(3),
+.tide-datasets-management-table td:nth-child(3) {
+  width: 165px;
+}
+
+.tide-datasets-management-table th:nth-child(4),
+.tide-datasets-management-table td:nth-child(4) {
+  width: 132px;
+}
+
+.tide-datasets-management-table th:nth-child(5),
+.tide-datasets-management-table td:nth-child(5) {
+  width: 150px;
+}
+
+.tide-datasets-management-table th:nth-child(6),
+.tide-datasets-management-table td:nth-child(6) {
+  width: 240px;
+}
+
+.tide-datasets-management-table th:nth-child(7),
+.tide-datasets-management-table td:nth-child(7) {
+  width: 130px;
+}
+
+.tide-datasets-management-table th:nth-child(8),
+.tide-datasets-management-table td:nth-child(8) {
+  width: 105px;
+}
+
+.tide-datasets-management-table th:nth-child(9),
+.tide-datasets-management-table td:nth-child(9) {
+  width: 66px;
+}
+
+.tide-datasets-management-table[data-view="importer"] th:nth-child(3),
+.tide-datasets-management-table[data-view="importer"] td:nth-child(3) {
+  width: 180px;
+}
+
+.tide-datasets-management-table[data-view="importer"] th:nth-child(4),
+.tide-datasets-management-table[data-view="importer"] td:nth-child(4),
+.tide-datasets-management-table[data-view="importer"] th:nth-child(5),
+.tide-datasets-management-table[data-view="importer"] td:nth-child(5),
+.tide-datasets-management-table[data-view="importer"] th:nth-child(6),
+.tide-datasets-management-table[data-view="importer"] td:nth-child(6) {
+  width: 96px;
+}
+
+.tide-datasets-management-table[data-view="importer"] th:nth-child(7),
+.tide-datasets-management-table[data-view="importer"] td:nth-child(7) {
+  width: 180px;
 }
 
 .admin-data-table input,
