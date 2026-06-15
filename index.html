@@ -7,7 +7,7 @@
   <title data-i18n="title.tides">Seaweed Tide Planner</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icons/tide-planner-icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-dataset-import-merge">
+  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-dataset-import-date">
 </head>
 <body>
   <header class="app-header">
@@ -18,8 +18,8 @@
       </div>
       <div class="header-actions">
         <nav class="app-nav" aria-label="Main navigation" data-i18n-aria-label="nav.mainLabel">
-          <a href="./index.html?v=20260615-dataset-import-merge" aria-current="page" data-i18n="nav.tides">Tides</a>
-          <a href="./map.html?v=20260615-dataset-import-merge" data-i18n="nav.map">Map</a>
+          <a href="./index.html?v=20260615-dataset-import-date" aria-current="page" data-i18n="nav.tides">Tides</a>
+          <a href="./map.html?v=20260615-dataset-import-date" data-i18n="nav.map">Map</a>
           <a href="./admin.html" class="desktop-admin-link" data-i18n="nav.admin">Admin</a>
         </nav>
         <div class="header-status">
@@ -64,7 +64,7 @@
         <h2 class="selected-location-heading">
           <span id="selectedLocationIcon" aria-hidden="true">&#127807;</span>
           <span id="selectedLocationName" data-i18n="status.loading">Loading</span>
-          <a id="showOnMapButton" class="button-link selected-map-link" href="./map.html?v=20260615-dataset-import-merge" data-i18n="map.showSelectedOnMap">Show on map</a>
+          <a id="showOnMapButton" class="button-link selected-map-link" href="./map.html?v=20260615-dataset-import-date" data-i18n="map.showSelectedOnMap">Show on map</a>
         </h2>
         <div class="clock-panel selected-location-clock" aria-live="polite">
           <span id="localClock" class="clock-value" data-i18n="clock.loading">Loading</span>
@@ -210,10 +210,10 @@
     <div class="noscript" data-i18n="noscript.tides">JavaScript is required to calculate and display tide predictions.</div>
   </noscript>
 
-  <script type="module" src="./assets/js/disclaimer.js?v=20260615-dataset-import-merge"></script>
-  <script type="module" src="./assets/js/language.js?v=20260615-dataset-import-merge"></script>
-  <script type="module" src="./assets/js/weather_alerts.js?v=20260615-dataset-import-merge"></script>
-  <script type="module" src="./assets/js/pwa.js?v=20260615-dataset-import-merge"></script>
-  <script type="module" src="./assets/js/tide_page.js?v=20260615-dataset-import-merge"></script>
+  <script type="module" src="./assets/js/disclaimer.js?v=20260615-dataset-import-date"></script>
+  <script type="module" src="./assets/js/language.js?v=20260615-dataset-import-date"></script>
+  <script type="module" src="./assets/js/weather_alerts.js?v=20260615-dataset-import-date"></script>
+  <script type="module" src="./assets/js/pwa.js?v=20260615-dataset-import-date"></script>
+  <script type="module" src="./assets/js/tide_page.js?v=20260615-dataset-import-date"></script>
 </body>
 </html>

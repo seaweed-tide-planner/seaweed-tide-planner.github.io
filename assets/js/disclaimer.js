@@ -1,4 +1,4 @@
-import { t } from "./language.js?v=20260615-dataset-import-merge";
+import { t } from "./language.js?v=20260615-dataset-import-date";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
 

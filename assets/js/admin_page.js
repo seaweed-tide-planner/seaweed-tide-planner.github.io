@@ -55,6 +55,7 @@ const DATASET_TABLE_VIEWS = {
   importer: [
     "Dataset ID",
     "Name",
+    "Imported date",
     "Coverage dates",
     "Hourly rows",
     "Event rows",
@@ -932,6 +933,7 @@ function renderDatasetImporterRow(row, index, rowId, rowClass) {
     <tr data-row-id="${escapeAttribute(rowId)}" data-row-kind="dataset" class="${rowClass}">
       <td class="id-cell">${datasetIdCell(row, index)}</td>
       <td>${readOnlyCell(row.dataset_name)}</td>
+      <td>${readOnlyCell(formatDateTime(row.imported_at))}</td>
       <td>${readOnlyCell(dataCoverageLabel(row))}</td>
       <td>${readOnlyCell(formatInteger(row.hourly_row_count))}</td>
       <td>${readOnlyCell(formatInteger(row.event_row_count))}</td>
