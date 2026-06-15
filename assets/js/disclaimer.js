@@ -1,4 +1,4 @@
-import { t } from "./language.js?v=20260615-admin-observations";
+import { t } from "./language.js?v=20260615-admin-public-observations";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
 

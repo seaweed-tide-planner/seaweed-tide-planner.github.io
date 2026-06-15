@@ -1,6 +1,5 @@
 import { APP_CONFIG } from "./config.js";
 
-const AUTH_SESSION_KEY = "seaweed_tide_planner:admin_auth_session";
 const TABLES = {
   locations: "farm_locations",
   datasets: "tide_datasets",
@@ -9,7 +8,6 @@ const TABLES = {
 const PHOTO_BUCKET = "tide-observation-photos";
 
 const state = {
-  authSession: null,
   locations: [],
   datasets: []
 };
@@ -21,23 +19,15 @@ document.addEventListener("DOMContentLoaded", init);
 async function init() {
   cacheElements();
   bindEvents();
-  loadStoredAuthSession();
   setDefaultDate();
-  updateAuthUi();
-  await verifyStoredSession();
-  if (state.authSession) await loadFormData();
+  setAuthStatus("Public observation form. No admin sign-in required.");
+  await loadFormData();
 }
 
 function cacheElements() {
   [
     "observationConnectionStatus",
     "observationAuthStatus",
-    "observationAuthForm",
-    "observationEmail",
-    "observationPassword",
-    "observationSignIn",
-    "observationSignOut",
-    "observationLocked",
     "observationWorkspace",
     "observationForm",
     "observationLocation",
@@ -76,15 +66,6 @@ function cacheElements() {
 }
 
 function bindEvents() {
-  els.observationAuthForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    await signIn();
-  });
-
-  els.observationSignOut.addEventListener("click", async () => {
-    await signOut();
-  });
-
   els.observationLocation.addEventListener("change", syncDatasetToLocation);
 
   els.clearObservationForm.addEventListener("click", () => {
@@ -110,7 +91,7 @@ async function loadFormData() {
     state.locations = locations;
     state.datasets = datasets;
     renderSelects();
-    setConnectionStatus("Admin connected", "");
+    setConnectionStatus("Form ready", "");
   } catch (error) {
     setConnectionStatus("Supabase error", "status-muted");
     setStatus(error.message, "error");
@@ -144,22 +125,30 @@ function syncDatasetToLocation() {
 
 async function submitObservation() {
   try {
-    requireSignedIn();
     setStatus("Saving observation...");
 
+    const observationId = window.crypto?.randomUUID?.() || fallbackId();
     const files = Array.from(els.observationPhotos.files || []);
-    const payload = buildObservationPayload(files);
+    let photoPaths = [];
+    let photoUploadError = null;
+
+    if (files.length) {
+      try {
+        setStatus("Uploading photo evidence...");
+        photoPaths = await uploadPhotos(observationId, files);
+      } catch (error) {
+        photoUploadError = error;
+      }
+    }
+
+    const payload = buildObservationPayload(files, observationId, photoPaths);
     const savedRows = await supabaseInsert(TABLES.observations, payload);
     const saved = savedRows[0];
 
-    if (saved?.id && files.length) {
-      try {
-        const photoPaths = await uploadPhotos(saved.id, files);
-        await supabasePatch(TABLES.observations, saved.id, { photo_paths: photoPaths });
-        setStatus(`Observation saved with ${photoPaths.length} photo(s).`);
-      } catch (photoError) {
-        setStatus(`Observation saved, but photo upload failed: ${photoError.message}`, "error");
-      }
+    if (photoUploadError) {
+      setStatus(`Observation saved, but photo upload failed: ${photoUploadError.message}`, "error");
+    } else if (saved?.id && photoPaths.length) {
+      setStatus(`Observation saved with ${photoPaths.length} photo(s).`);
     } else {
       setStatus("Observation saved.");
     }
@@ -172,14 +161,15 @@ async function submitObservation() {
   }
 }
 
-function buildObservationPayload(files) {
+function buildObservationPayload(files, observationId, photoPaths) {
   const location = selectedLocation();
   const datasetId = nullableText(els.observationDataset.value) || location?.default_tide_dataset_id || null;
 
   return {
+    id: observationId,
     location_id: requiredText(els.observationLocation.value, "Farm/location"),
     dataset_id: datasetId,
-    source_type: "admin_electronic_form",
+    source_type: "public_electronic_form",
     observer_name: requiredText(els.observerName.value, "Observer name"),
     observer_contact: nullableText(els.observerContact.value),
     village_or_group: nullableText(els.villageOrGroup.value),
@@ -206,6 +196,7 @@ function buildObservationPayload(files) {
     rain: nullableText(els.rain.value),
     photo_taken: files.length > 0,
     photo_file_names: files.map((file) => file.name),
+    photo_paths: photoPaths,
     observation_confidence: els.observationConfidence.value || "approximate",
     notes: nullableText(els.observationNotes.value),
     review_status: "raw"
@@ -220,7 +211,7 @@ async function uploadPhotos(observationId, files) {
       method: "POST",
       headers: {
         apikey: APP_CONFIG.supabase.anonKey,
-        Authorization: `Bearer ${state.authSession.access_token}`,
+        Authorization: `Bearer ${APP_CONFIG.supabase.anonKey}`,
         "Content-Type": file.type || "application/octet-stream",
         "x-upsert": "false"
       },
@@ -236,77 +227,6 @@ async function uploadPhotos(observationId, files) {
   return paths;
 }
 
-async function signIn() {
-  const email = requiredText(els.observationEmail.value, "Email");
-  const password = requiredText(els.observationPassword.value, "Password");
-
-  try {
-    setAuthStatus("Signing in...");
-    const response = await fetch(`${APP_CONFIG.supabase.url}/auth/v1/token?grant_type=password`, {
-      method: "POST",
-      headers: {
-        apikey: APP_CONFIG.supabase.anonKey,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ email, password })
-    });
-
-    if (!response.ok) throw new Error(await authErrorMessage(response));
-
-    const session = await response.json();
-    state.authSession = normalizeSession(session);
-    writeStoredAuthSession(state.authSession);
-    els.observationPassword.value = "";
-    updateAuthUi();
-    await loadFormData();
-  } catch (error) {
-    clearStoredAuthSession();
-    state.authSession = null;
-    updateAuthUi();
-    setAuthStatus(error.message, "error");
-  }
-}
-
-async function signOut() {
-  const token = state.authSession?.access_token;
-  clearStoredAuthSession();
-  state.authSession = null;
-  updateAuthUi();
-  if (token) {
-    try {
-      await fetch(`${APP_CONFIG.supabase.url}/auth/v1/logout`, {
-        method: "POST",
-        headers: {
-          apikey: APP_CONFIG.supabase.anonKey,
-          Authorization: `Bearer ${token}`
-        }
-      });
-    } catch {
-      // Local sign-out still succeeds if the network request fails.
-    }
-  }
-}
-
-async function verifyStoredSession() {
-  if (!state.authSession?.access_token) return;
-  try {
-    const response = await fetch(`${APP_CONFIG.supabase.url}/auth/v1/user`, {
-      headers: {
-        apikey: APP_CONFIG.supabase.anonKey,
-        Authorization: `Bearer ${state.authSession.access_token}`
-      }
-    });
-    if (!response.ok) throw new Error("Stored admin session has expired.");
-    state.authSession.user = await response.json();
-    writeStoredAuthSession(state.authSession);
-    updateAuthUi();
-  } catch {
-    clearStoredAuthSession();
-    state.authSession = null;
-    updateAuthUi();
-  }
-}
-
 async function supabaseSelect(table, query) {
   return supabaseRequest(`${table}?${query}`);
 }
@@ -315,26 +235,14 @@ async function supabaseInsert(table, payload) {
   return supabaseRequest(table, {
     method: "POST",
     body: payload,
-    prefer: "return=representation",
-    requireAuth: true
-  });
-}
-
-async function supabasePatch(table, id, payload) {
-  return supabaseRequest(`${table}?id=eq.${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    body: payload,
-    prefer: "return=representation",
-    requireAuth: true
+    prefer: "return=representation"
   });
 }
 
 async function supabaseRequest(path, options = {}) {
-  if (options.requireAuth) requireSignedIn();
-  const token = state.authSession?.access_token || APP_CONFIG.supabase.anonKey;
   const headers = {
     apikey: APP_CONFIG.supabase.anonKey,
-    Authorization: `Bearer ${token}`
+    Authorization: `Bearer ${APP_CONFIG.supabase.anonKey}`
   };
   if (options.body) headers["Content-Type"] = "application/json";
   if (options.prefer) headers.Prefer = options.prefer;
@@ -374,18 +282,6 @@ function setDefaultDate() {
   els.observationDate.value = `${year}-${month}-${day}`;
 }
 
-function updateAuthUi() {
-  const signedIn = !!state.authSession?.access_token;
-  const email = state.authSession?.user?.email || "signed-in admin";
-  document.body.classList.toggle("admin-signed-in", signedIn);
-  els.observationLocked.hidden = signedIn;
-  els.observationWorkspace.hidden = !signedIn;
-  els.observationSignIn.disabled = signedIn;
-  els.observationSignOut.disabled = !signedIn;
-  setAuthStatus(signedIn ? `Signed in as ${email}.` : "Sign in with an approved Supabase admin account.");
-  setConnectionStatus(signedIn ? "Admin connected" : "Sign in required", signedIn ? "" : "status-muted");
-}
-
 function setConnectionStatus(text, extraClass) {
   els.observationConnectionStatus.textContent = text;
   els.observationConnectionStatus.className = `status-pill ${extraClass || ""}`.trim();
@@ -399,46 +295,6 @@ function setAuthStatus(message, type = "") {
 function setStatus(message, type = "") {
   els.observationSaveStatus.textContent = message || "";
   els.observationSaveStatus.dataset.status = type;
-}
-
-function normalizeSession(session) {
-  return {
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
-    expires_at: session.expires_at || (session.expires_in ? Math.floor(Date.now() / 1000) + session.expires_in : null),
-    user: session.user || null
-  };
-}
-
-function loadStoredAuthSession() {
-  try {
-    const raw = window.sessionStorage.getItem(AUTH_SESSION_KEY);
-    state.authSession = raw ? JSON.parse(raw) : null;
-  } catch {
-    state.authSession = null;
-  }
-}
-
-function writeStoredAuthSession(session) {
-  try {
-    window.sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
-  } catch {
-    // In-memory session still works if storage is blocked.
-  }
-}
-
-function clearStoredAuthSession() {
-  try {
-    window.sessionStorage.removeItem(AUTH_SESSION_KEY);
-  } catch {
-    // Ignore restricted storage.
-  }
-}
-
-function requireSignedIn() {
-  if (!state.authSession?.access_token) {
-    throw new Error("Sign in as an approved admin user before saving.");
-  }
 }
 
 function requiredText(value, label) {
@@ -476,6 +332,10 @@ function encodeURIComponentPath(path) {
   return String(path).split("/").map(encodeURIComponent).join("/");
 }
 
+function fallbackId() {
+  return `00000000-0000-4000-8000-${String(Date.now()).slice(-12).padStart(12, "0")}`;
+}
+
 async function responseDetail(response) {
   try {
     const errorBody = await response.json();
@@ -487,19 +347,10 @@ async function responseDetail(response) {
   }
 }
 
-async function authErrorMessage(response) {
-  try {
-    const body = await response.json();
-    return body.msg || body.message || body.error_description || `${response.status} ${response.statusText}`;
-  } catch {
-    return `${response.status} ${response.statusText}`;
-  }
-}
-
 function writeErrorMessage(error) {
   const message = error?.message || String(error);
   if (/401|403|permission|policy|row-level|JWT/i.test(message)) {
-    return `${message}. Writes need an authenticated admin policy. Apply the location observations SQL and sign in as an approved admin/operator.`;
+    return `${message}. Apply the public observation form SQL policy before using the no-login form.`;
   }
   return message;
 }

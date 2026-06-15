@@ -307,6 +307,49 @@ h3 {
   color: #fff;
 }
 
+.weather-warning-strip {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.42);
+  border-left: 4px solid var(--warn);
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #65420b;
+  font-size: 0.86rem;
+  box-shadow: 0 3px 10px rgba(120, 75, 8, 0.06);
+}
+
+.weather-warning-strip strong {
+  color: #92400e;
+  font-weight: 700;
+}
+
+.weather-warning-strip a {
+  margin-left: auto;
+  color: #92400e;
+  font-weight: 700;
+  text-align: right;
+}
+
+.weather-warning-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(146, 64, 14, 0.36);
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .location-card {
   grid-template-columns: minmax(260px, 520px) max-content;
   align-items: end;

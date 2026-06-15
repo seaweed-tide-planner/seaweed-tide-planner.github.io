@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f766e">
   <meta name="robots" content="noindex,nofollow">
   <title>Admin - Seaweed Tide Planner</title>
-  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-locations-table">
+  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-admin-public-observations">
 </head>
 <body class="admin-console-page">
   <header class="app-header">
@@ -17,8 +17,8 @@
       </div>
       <div class="admin-header-controls compact">
         <nav class="app-nav" aria-label="Main navigation">
-          <a href="./index.html?v=20260615-locations-table">Tides</a>
-          <a href="./map.html?v=20260615-locations-table">Map</a>
+          <a href="./index.html?v=20260615-admin-public-observations">Tides</a>
+          <a href="./map.html?v=20260615-admin-public-observations">Map</a>
           <a href="./admin.html" class="desktop-admin-link" aria-current="page">Admin</a>
         </nav>
         <div class="admin-header-status">
@@ -38,10 +38,10 @@
       <p class="admin-menu-heading">Tide Planner Settings</p>
       <a href="./admin_settings.html">Settings</a>
 
-      <p class="admin-menu-heading">Location &amp; Tide Data</p>
-      <a href="./locations.html">Locations</a>
+      <p class="admin-menu-heading">Locations and Tides</p>
+      <a href="./locations.html">Site Locations</a>
+      <a href="./tide_datasets.html">Tide Datasets</a>
       <a href="./importer.html">Tide dataset importer</a>
-      <a href="./calibration.html">Location tide calibration</a>
       <a href="./observation.html">Observation form</a>
     </aside>
 
@@ -57,7 +57,7 @@
 
         <div class="admin-metric-grid">
           <article class="admin-metric-card">
-            <span>Farms</span>
+            <span>Site locations</span>
             <strong id="metricFarmCount">--</strong>
           </article>
           <article class="admin-metric-card">
@@ -69,15 +69,15 @@
             <strong id="metricUnverifiedSources">--</strong>
           </article>
           <article class="admin-metric-card warning">
-            <span>Farms hidden</span>
+            <span>Site locations hidden</span>
             <strong id="metricHiddenFarms">--</strong>
           </article>
           <article class="admin-metric-card warning">
-            <span>Farms not verified</span>
+            <span>Site locations not verified</span>
             <strong id="metricNotVerifiedFarms">--</strong>
           </article>
           <article class="admin-metric-card warning">
-            <span>Farms not calibrated</span>
+            <span>Site locations not calibrated</span>
             <strong id="metricNotCalibrated">--</strong>
           </article>
           <article class="admin-metric-card warning">
@@ -91,42 +91,25 @@
         <h2>Admin Areas</h2>
         <div class="admin-area-group">
           <div class="admin-area-heading">
-            <h3>Locations</h3>
-            <p class="field-hint">Farm records, local calibration status, and field observation entry.</p>
+            <h3>Locations and Tides</h3>
+            <p class="field-hint">Site location records, local calibration status, tide datasets, and observation entry.</p>
           </div>
           <div class="admin-shortcut-grid">
             <a class="admin-shortcut-card" href="./locations.html#locations">
-              <strong>Locations Table</strong>
-              <span>Farm/app locations, GPS coordinates, app visibility, and linked tide dataset.</span>
+              <strong>Site Locations</strong>
+              <span>Site locations, GPS coordinates, app visibility, linked tide dataset, and calibration tools.</span>
             </a>
-            <a class="admin-shortcut-card" href="./calibration.html">
-              <strong>Calibration Table</strong>
-              <span>Compact status table for tide calibration by location.</span>
-            </a>
-            <a class="admin-shortcut-card" href="./calibration.html">
-              <strong>Calibration Inputs</strong>
-              <span>Edit one farm/location tide calibration record at a time.</span>
-            </a>
-            <a class="admin-shortcut-card" href="./observation.html">
-              <strong>Observation Form</strong>
-              <span>Enter local tide observations collected in the field.</span>
-            </a>
-          </div>
-        </div>
-
-        <div class="admin-area-group">
-          <div class="admin-area-heading">
-            <h3>Tide Dataset</h3>
-            <p class="field-hint">Reference tide datasets, source metadata, and raw data import tools.</p>
-          </div>
-          <div class="admin-shortcut-grid">
-            <a class="admin-shortcut-card" href="./locations.html#datasets">
-              <strong>Tide Datasets Table</strong>
+            <a class="admin-shortcut-card" href="./tide_datasets.html">
+              <strong>Tide Datasets</strong>
               <span>Reference source metadata, coverage dates, verification, and dataset use.</span>
             </a>
             <a class="admin-shortcut-card" href="./importer.html">
               <strong>Tide Dataset Importer</strong>
               <span>Preview and import raw tide CSV data into selected datasets.</span>
+            </a>
+            <a class="admin-shortcut-card" href="./observation.html">
+              <strong>Observation Form</strong>
+              <span>Enter local tide observations collected in the field.</span>
             </a>
           </div>
         </div>
@@ -181,7 +164,7 @@
     <p><strong class="safety-label">Safety:</strong> <span class="marine-disclaimer-text">Not for marine navigation or safety-of-life decisions. Tide guidance may be wrong, stale, unverified, or affected by local weather and sea conditions. Check official/local sources and current conditions before acting.</span> <button type="button" data-disclaimer-open>Full disclaimer</button></p>
   </footer>
 
-  <script type="module" src="./assets/js/disclaimer.js?v=20260615-locations-table"></script>
-  <script type="module" src="./assets/js/admin_page.js?v=20260615-locations-table"></script>
+  <script type="module" src="./assets/js/disclaimer.js?v=20260615-admin-public-observations"></script>
+  <script type="module" src="./assets/js/admin_page.js?v=20260615-admin-public-observations"></script>
 </body>
 </html>

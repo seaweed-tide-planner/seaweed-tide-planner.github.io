@@ -1,0 +1,34 @@
+Section,Field,Input type,Options,Notes
+Location and Observer,Farm/location name,text,,Required
+Location and Observer,Village/group name,text,,Optional
+Location and Observer,Observer name,text,,Required
+Location and Observer,Phone/contact,text,,Optional
+Location and Observer,Date,date,,Required
+Location and Observer,Time zone,text,Africa/Nairobi,Pre-filled
+Observation Time,Observation start time,time,,Required
+Observation Time,Observation end time,time,,Optional
+Observation Time,Observation focus,choice,"Low tide; High tide; General tide movement; Not sure",Required
+Tide Movement,Tide state at start,choice,"Falling; Lowest/nearly still; Rising; Highest/nearly still; Not sure",Required
+Tide Movement,Approximate time water was lowest,time,,Optional
+Tide Movement,Approximate time water was highest,time,,Optional
+Tide Movement,Time beds/lines first became exposed,time,,Optional
+Tide Movement,Time beds/lines covered again,time,,Optional
+Water Height,Fixed measuring point used,choice,"Yes; No",Required
+Water Height,Fixed point description,text,,Optional
+Water Height,Water height reading,number,,Optional
+Water Height,Water height unit,choice,"cm; m",Optional
+Water Height,Water compared with fixed mark,choice,"Above mark; At mark; Below mark; Not sure",Optional
+Farm and Harvest Conditions,Seaweed lines exposed,choice,"Yes; Partly; No",Required
+Farm and Harvest Conditions,Farm accessible on foot,choice,"Yes; With difficulty; No; Not checked",Required
+Farm and Harvest Conditions,Water too deep for harvest,choice,"Yes; No; Not sure",Optional
+Farm and Harvest Conditions,Current strength,choice,"Calm/still; Light; Strong; Not sure",Optional
+Farm and Harvest Conditions,Crop damage seen,choice,"Yes; No",Optional
+Weather and Sea Conditions,Wind,choice,"Calm; Light; Strong",Optional
+Weather and Sea Conditions,Wind direction,text,,Optional
+Weather and Sea Conditions,Sea state,choice,"Calm; Choppy; Rough",Optional
+Weather and Sea Conditions,Rain,choice,"None; Light; Heavy",Optional
+Weather and Sea Conditions,Unusual conditions,multi-choice,"Storm; River/flood water; Large swell; Unusually low water; Unusually high water; Other",Optional
+Evidence,Photo taken,choice,"Yes; No",Optional
+Evidence,Photo number/file name,text,,Optional
+Confidence,Observation confidence,choice,"Good; Approximate; Unsure",Required
+Confidence,General comments,long text,,Optional

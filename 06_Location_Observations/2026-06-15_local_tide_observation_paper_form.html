@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Local Tide Observation Paper Form</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: #12362f;
+      font-family: Arial, sans-serif;
+      font-size: 9.5pt;
+      line-height: 1.24;
+    }
+
+    h1 {
+      margin: 0 0 2mm;
+      font-size: 16pt;
+      line-height: 1.05;
+    }
+
+    h2 {
+      margin: 0 0 1.8mm;
+      font-size: 10.5pt;
+      line-height: 1.1;
+    }
+
+    p {
+      margin: 0 0 2mm;
+    }
+
+    .meta {
+      color: #457c72;
+      font-size: 8.2pt;
+    }
+
+    .notice {
+      margin: 2mm 0 3mm;
+      padding: 2mm;
+      border: 0.4mm solid #c9e3dc;
+      background: #f2f8f6;
+      font-size: 8.2pt;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2mm 3mm;
+    }
+
+    .section {
+      margin-bottom: 3mm;
+      padding: 2.5mm;
+      border: 0.25mm solid #c9e3dc;
+      border-radius: 2mm;
+    }
+
+    .section.compact {
+      padding: 2mm;
+    }
+
+    .line {
+      display: grid;
+      grid-template-columns: 35mm 1fr;
+      gap: 2mm;
+      align-items: end;
+      margin-bottom: 1.8mm;
+    }
+
+    .line span:last-child,
+    .fill {
+      min-height: 4.3mm;
+      border-bottom: 0.25mm solid #6d8f88;
+    }
+
+    .short-lines {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2mm;
+    }
+
+    .check-row {
+      display: flex;
+      gap: 3mm;
+      flex-wrap: wrap;
+      margin: 1.2mm 0 1.8mm;
+    }
+
+    .box {
+      display: inline-flex;
+      align-items: center;
+      gap: 1mm;
+      white-space: nowrap;
+    }
+
+    .box::before {
+      content: "";
+      width: 3.3mm;
+      height: 3.3mm;
+      border: 0.25mm solid #12362f;
+      display: inline-block;
+    }
+
+    .notes {
+      height: 11mm;
+      border: 0.25mm solid #c9e3dc;
+      background:
+        linear-gradient(to bottom, transparent 4.8mm, #d8e8e4 4.9mm, transparent 5mm);
+      background-size: 100% 5mm;
+    }
+
+    .page-break {
+      break-before: page;
+    }
+
+    .footer {
+      color: #6d8f88;
+      font-size: 7.5pt;
+    }
+  </style>
+</head>
+<body>
+  <h1>Local Tide Observation Form</h1>
+  <p class="meta">Seaweed Tide Planner - field observation record. Time zone: Africa/Nairobi.</p>
+  <p class="notice">Use this form to record what actually happens at a site location. This is not a navigation record and does not change tide predictions until reviewed.</p>
+
+  <section class="section">
+    <h2>1. Site and Observer</h2>
+    <div class="grid">
+      <div class="line"><span>Site/location</span><span></span></div>
+      <div class="line"><span>Village/group</span><span></span></div>
+      <div class="line"><span>Observer name</span><span></span></div>
+      <div class="line"><span>Phone/contact</span><span></span></div>
+    </div>
+    <div class="short-lines">
+      <div class="line"><span>Date</span><span></span></div>
+      <div class="line"><span>Start time</span><span></span></div>
+      <div class="line"><span>End time</span><span></span></div>
+    </div>
+  </section>
+
+  <section class="section compact">
+    <h2>2. Observation Focus</h2>
+    <div class="check-row">
+      <span class="box">Low tide</span>
+      <span class="box">High tide</span>
+      <span class="box">General tide movement</span>
+      <span class="box">Not sure</span>
+    </div>
+    <div class="check-row">
+      <strong>At the start, water was:</strong>
+      <span class="box">Falling</span>
+      <span class="box">Lowest / nearly still</span>
+      <span class="box">Rising</span>
+      <span class="box">Highest / nearly still</span>
+      <span class="box">Not sure</span>
+    </div>
+    <div class="short-lines">
+      <div class="line"><span>Lowest time</span><span></span></div>
+      <div class="line"><span>Highest time</span><span></span></div>
+      <div class="line"><span>Current strength</span><span></span></div>
+    </div>
+  </section>
+
+  <section class="section compact">
+    <h2>3. Farm Exposure and Access</h2>
+    <div class="grid">
+      <div>
+        <strong>Seaweed lines exposed?</strong>
+        <div class="check-row"><span class="box">Yes</span><span class="box">Partly</span><span class="box">No</span></div>
+      </div>
+      <div>
+        <strong>Farm accessible on foot?</strong>
+        <div class="check-row"><span class="box">Yes</span><span class="box">With difficulty</span><span class="box">No</span><span class="box">Not checked</span></div>
+      </div>
+    </div>
+    <div class="short-lines">
+      <div class="line"><span>First exposed</span><span></span></div>
+      <div class="line"><span>Covered again</span><span></span></div>
+      <div class="line"><span>Too deep?</span><span></span></div>
+    </div>
+    <div class="grid">
+      <div>
+        <strong>Crop damage seen?</strong>
+        <div class="check-row"><span class="box">Yes</span><span class="box">No</span><span class="box">Unsure</span></div>
+      </div>
+      <div>
+        <strong>Water movement/current:</strong>
+        <div class="check-row"><span class="box">Calm/still</span><span class="box">Light</span><span class="box">Strong</span><span class="box">Unsure</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section compact">
+    <h2>4. Water Height</h2>
+    <div class="check-row">
+      <strong>Fixed measuring point used?</strong>
+      <span class="box">Yes</span>
+      <span class="box">No</span>
+      <span class="box">Not recorded</span>
+    </div>
+    <div class="grid">
+      <div class="line"><span>Point description</span><span></span></div>
+      <div class="line"><span>Water height</span><span></span></div>
+    </div>
+    <div class="check-row">
+      <strong>Unit:</strong>
+      <span class="box">cm</span>
+      <span class="box">m</span>
+      <strong>Compared with mark:</strong>
+      <span class="box">Above</span>
+      <span class="box">At mark</span>
+      <span class="box">Below</span>
+      <span class="box">Unsure</span>
+    </div>
+    <p>Notes/sketch of measuring point:</p>
+    <div class="notes"></div>
+  </section>
+
+  <section class="section compact page-break">
+    <h2>5. Weather and Sea Conditions</h2>
+    <div class="grid">
+      <div>
+        <strong>Wind:</strong>
+        <div class="check-row"><span class="box">Calm</span><span class="box">Light</span><span class="box">Strong</span><span class="box">Unsure</span></div>
+      </div>
+      <div class="line"><span>Wind direction</span><span></span></div>
+      <div>
+        <strong>Sea state:</strong>
+        <div class="check-row"><span class="box">Calm</span><span class="box">Choppy</span><span class="box">Rough</span><span class="box">Unsure</span></div>
+      </div>
+      <div>
+        <strong>Rain:</strong>
+        <div class="check-row"><span class="box">None</span><span class="box">Light</span><span class="box">Heavy</span><span class="box">Unsure</span></div>
+      </div>
+    </div>
+    <div class="check-row">
+      <strong>Unusual conditions:</strong>
+      <span class="box">Storm</span>
+      <span class="box">River/flood water</span>
+      <span class="box">Large swell</span>
+      <span class="box">Unusually low water</span>
+      <span class="box">Unusually high water</span>
+      <span class="box">Other</span>
+    </div>
+  </section>
+
+  <section class="section compact">
+    <h2>6. Evidence and Confidence</h2>
+    <div class="grid">
+      <div>
+        <strong>Photo taken?</strong>
+        <div class="check-row"><span class="box">Yes</span><span class="box">No</span></div>
+      </div>
+      <div class="line"><span>Photo/file name</span><span></span></div>
+    </div>
+    <div class="check-row">
+      <strong>Confidence:</strong>
+      <span class="box">Good</span>
+      <span class="box">Approximate</span>
+      <span class="box">Unsure</span>
+    </div>
+  </section>
+
+  <section class="section compact">
+    <h2>7. General Notes</h2>
+    <div class="notes" style="height: 34mm;"></div>
+  </section>
+
+  <p class="footer">Submit this form to a Tide Planner admin/operator. Not for marine navigation or safety-of-life decisions.</p>
+</body>
+</html>

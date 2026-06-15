@@ -4,6 +4,7 @@ const TABLES = {
   locations: "farm_locations",
   datasets: "tide_datasets",
   adminUsers: "tide_admin_users",
+  calibrationRecords: "location_tide_calibrations",
   calibrationSummary: "location_tide_calibration_admin_summary"
 };
 
@@ -24,12 +25,15 @@ const state = {
   locations: [],
   datasets: [],
   calibrations: [],
+  calibrationRecords: [],
   adminUsers: [],
   authSession: null,
   hasLocationDraft: false,
   hasDatasetDraft: false,
   editingLocationId: null,
-  editingDatasetId: null
+  editingDatasetId: null,
+  selectedCalibrationId: null,
+  requestedCalibrationLocationId: ""
 };
 
 const els = {};
@@ -42,6 +46,7 @@ window.addEventListener("unhandledrejection", (event) => {
 
 async function init() {
   cacheElements();
+  state.requestedCalibrationLocationId = new URLSearchParams(window.location.search).get("location_id") || "";
   bindEvents();
   loadStoredAuthSession();
   updateAuthUi();
@@ -81,7 +86,25 @@ function cacheElements() {
     "adminUsersStatus",
     "adminUsersTableBody",
     "reloadAdminUsers",
-    "languageSettingsStatus"
+    "languageSettingsStatus",
+    "reloadCalibration",
+    "calibrationForm",
+    "calibrationLocation",
+    "calibrationDataset",
+    "calibrationStatus",
+    "calibrationConfidence",
+    "lowTideOffset",
+    "highTideOffset",
+    "curveOffset",
+    "heightRatio",
+    "heightOffset",
+    "harvestThreshold",
+    "observationRecordNumber",
+    "lastEditedBy",
+    "calibrationNotes",
+    "calibrationSaveStatus",
+    "calibrationRowCount",
+    "calibrationTableBody"
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -101,6 +124,7 @@ function bindEvents() {
   els.reloadDatasets?.addEventListener("click", () => loadDatasets());
   els.reloadAdminUsers?.addEventListener("click", () => loadAdminUsers());
   els.reloadAdminDashboard?.addEventListener("click", () => loadAll());
+  els.reloadCalibration?.addEventListener("click", () => loadCalibrationPanelData());
 
   document.querySelectorAll("[data-language-status]").forEach((select) => {
     select.addEventListener("change", saveLanguageSettings);
@@ -141,6 +165,17 @@ function bindEvents() {
       return;
     }
 
+    const calibrationButton = event.target.closest("[data-edit-calibration]");
+    if (calibrationButton) {
+      if (!state.authSession) {
+        setStatus(els.locationSaveStatus, "Sign in before editing calibration.", "error");
+        return;
+      }
+      loadCalibrationIntoForm(calibrationButton.dataset.editCalibration);
+      els.calibrationForm?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
     const button = event.target.closest("[data-save-location]");
     if (!button) return;
     await saveLocationRow(button.closest("tr"));
@@ -169,6 +204,22 @@ function bindEvents() {
     if (!button) return;
     await saveAdminUserRow(button.closest("tr"));
   });
+
+  els.calibrationLocation?.addEventListener("change", () => {
+    loadCalibrationIntoForm(els.calibrationLocation.value);
+  });
+
+  els.calibrationForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await saveCalibration();
+  });
+
+  els.calibrationTableBody?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-edit-calibration]");
+    if (!button) return;
+    loadCalibrationIntoForm(button.dataset.editCalibration);
+    els.calibrationForm?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 async function loadAll() {
@@ -179,6 +230,7 @@ async function loadAll() {
     await loadCalibrations({ quiet: true });
     await loadLocations({ quiet: true });
     if (state.authSession) await loadAdminUsers({ quiet: true });
+    renderCalibrationPanel();
     renderDashboardMetrics();
     setConnectionStatus(state.authSession ? "Admin connected" : "Public connected", "");
     setSignedOutHints();
@@ -210,6 +262,7 @@ async function loadLocations(options = {}) {
   state.hasLocationDraft = false;
   state.editingLocationId = null;
   renderLocations();
+  renderCalibrationPanel();
   renderDashboardMetrics();
   if (!options.quiet) setStatus(els.locationSaveStatus, `Loaded ${state.locations.length} location row(s).`);
 }
@@ -220,6 +273,7 @@ async function loadDatasets(options = {}) {
   state.hasDatasetDraft = false;
   state.editingDatasetId = null;
   renderDatasets();
+  renderCalibrationPanel();
   renderDashboardMetrics();
   if (!options.quiet) setStatus(els.datasetSaveStatus, `Loaded ${state.datasets.length} dataset row(s).`);
 }
@@ -232,6 +286,36 @@ async function loadCalibrations(options = {}) {
     if (!options.quiet) {
       setStatus(els.locationSaveStatus, `Calibration summary unavailable. Apply the observation/calibration SQL first. ${error.message}`, "error");
     }
+  }
+
+  if (!hasCalibrationPanel()) {
+    state.calibrationRecords = [];
+    return;
+  }
+
+  try {
+    state.calibrationRecords = await supabaseSelect(TABLES.calibrationRecords, "select=*&order=updated_at.desc");
+  } catch (error) {
+    state.calibrationRecords = [];
+    if (!options.quiet) {
+      setStatus(els.calibrationSaveStatus, `Calibration records unavailable. ${writeErrorMessage(error)}`, "error");
+    }
+  }
+
+  renderCalibrationPanel();
+}
+
+async function loadCalibrationPanelData() {
+  if (!hasCalibrationPanel()) return;
+  setStatus(els.calibrationSaveStatus, "Loading calibration data...");
+  try {
+    await loadDatasets({ quiet: true });
+    await loadLocations({ quiet: true });
+    await loadCalibrations({ quiet: true });
+    renderCalibrationPanel();
+    setStatus(els.calibrationSaveStatus, `Loaded ${state.calibrations.length} calibration row(s).`);
+  } catch (error) {
+    setStatus(els.calibrationSaveStatus, writeErrorMessage(error), "error");
   }
 }
 
@@ -392,6 +476,151 @@ function renderDatasets() {
 
   let displayIndex = 0;
   els.datasetsTableBody.innerHTML = rows.map((row) => renderDatasetRow(row, row.id ? displayIndex++ : -1)).join("");
+}
+
+function renderCalibrationPanel() {
+  if (!hasCalibrationPanel()) return;
+  renderCalibrationSelects();
+  renderCalibrationTable();
+
+  if (!els.calibrationLocation?.value && state.locations.length) {
+    openInitialCalibrationLocation();
+  }
+}
+
+function hasCalibrationPanel() {
+  return !!(els.calibrationForm || els.calibrationTableBody);
+}
+
+function renderCalibrationSelects() {
+  if (els.calibrationLocation) {
+    const selectedLocation = els.calibrationLocation.value || state.requestedCalibrationLocationId;
+    els.calibrationLocation.innerHTML = [
+      `<option value="">Select location</option>`,
+      ...state.locations.map((location) => {
+        const selected = location.id === selectedLocation ? " selected" : "";
+        return `<option value="${escapeAttribute(location.id)}"${selected}>${escapeHtml(locationLabel(location))}</option>`;
+      })
+    ].join("");
+  }
+
+  if (els.calibrationDataset) {
+    const selectedDataset = els.calibrationDataset.value;
+    els.calibrationDataset.innerHTML = [
+      `<option value="">Use location default / not set</option>`,
+      ...state.datasets.map((dataset) => {
+        const label = dataset.dataset_name || dataset.dataset_key || dataset.id;
+        const selected = dataset.id === selectedDataset ? " selected" : "";
+        return `<option value="${escapeAttribute(dataset.id)}"${selected}>${escapeHtml(label)}</option>`;
+      })
+    ].join("");
+  }
+}
+
+function renderCalibrationTable() {
+  if (!els.calibrationRowCount || !els.calibrationTableBody) return;
+  els.calibrationRowCount.textContent = `${state.calibrations.length} row${state.calibrations.length === 1 ? "" : "s"}`;
+  els.calibrationTableBody.innerHTML = state.calibrations.length
+    ? state.calibrations.map(renderCalibrationRow).join("")
+    : emptyRow(10, "No site locations found.");
+}
+
+function renderCalibrationRow(row) {
+  const status = calibrationStatusForValue(row.calibration_status);
+  const evidence = [
+    row.observation_record_number ? `record: ${row.observation_record_number}` : "",
+    row.confidence ? `confidence: ${row.confidence}` : "",
+    row.last_edited_by ? `edited: ${row.last_edited_by}` : ""
+  ].filter(Boolean).join("; ");
+  const selectedClass = row.location_id === els.calibrationLocation?.value ? "editing-row" : "";
+
+  return `
+    <tr class="${selectedClass}">
+      <td>${escapeHtml(row.location_code || shortId(row.location_id))}</td>
+      <td><strong>${escapeHtml(row.location_name || "")}</strong></td>
+      <td><span class="status-pill calibration-status-pill" data-status="${escapeAttribute(status.value)}">${escapeHtml(status.label)}</span></td>
+      <td>${escapeHtml(row.reference_dataset_name || "Location default")}</td>
+      <td>${formatMinutes(row.low_tide_time_offset_minutes)}</td>
+      <td>${formatMinutes(row.high_tide_time_offset_minutes)}</td>
+      <td>${formatNumber(row.height_ratio)}</td>
+      <td>${formatMetres(row.height_offset_m)}</td>
+      <td>${escapeHtml(evidence || "-")}</td>
+      <td><button type="button" data-edit-calibration="${escapeAttribute(row.location_id)}" ${state.authSession ? "" : "disabled"}>Edit</button></td>
+    </tr>
+  `;
+}
+
+function openInitialCalibrationLocation() {
+  const locationId = state.requestedCalibrationLocationId || els.calibrationLocation?.value || state.locations[0]?.id || "";
+  if (!locationId) return;
+  loadCalibrationIntoForm(locationId);
+}
+
+function loadCalibrationIntoForm(locationId) {
+  if (!els.calibrationForm || !els.calibrationLocation) return;
+  els.calibrationLocation.value = locationId || "";
+  const location = state.locations.find((item) => item.id === locationId);
+  const calibration = activeCalibrationForLocation(locationId);
+  state.selectedCalibrationId = calibration?.id || null;
+  state.requestedCalibrationLocationId = locationId || "";
+
+  els.calibrationDataset.value = calibration?.reference_dataset_id || location?.default_tide_dataset_id || datasetIdForKey(location?.default_tide_dataset_key) || "";
+  els.calibrationStatus.value = calibration?.status || "none";
+  els.calibrationConfidence.value = calibration?.confidence || "low";
+  els.lowTideOffset.value = valueOrEmpty(calibration?.low_tide_time_offset_minutes);
+  els.highTideOffset.value = valueOrEmpty(calibration?.high_tide_time_offset_minutes);
+  els.curveOffset.value = valueOrEmpty(calibration?.curve_time_offset_minutes);
+  els.heightRatio.value = valueOrEmpty(calibration?.height_ratio);
+  els.heightOffset.value = valueOrEmpty(calibration?.height_offset_m);
+  els.harvestThreshold.value = valueOrEmpty(calibration?.harvest_threshold_m ?? location?.default_harvest_threshold_m);
+  els.observationRecordNumber.value = valueOrEmpty(calibration?.observation_record_number);
+  els.lastEditedBy.value = valueOrEmpty(calibration?.last_edited_by || currentUserEmail());
+  els.calibrationNotes.value = valueOrEmpty(calibration?.notes);
+  renderCalibrationTable();
+}
+
+async function saveCalibration() {
+  try {
+    requireSignedIn();
+    const locationId = requiredText(els.calibrationLocation.value, "Location");
+    const status = els.calibrationStatus.value || "none";
+    const payload = {
+      location_id: locationId,
+      reference_dataset_id: nullableText(els.calibrationDataset.value),
+      status,
+      active: status !== "none",
+      low_tide_time_offset_minutes: nullableInteger(els.lowTideOffset.value),
+      high_tide_time_offset_minutes: nullableInteger(els.highTideOffset.value),
+      curve_time_offset_minutes: nullableInteger(els.curveOffset.value),
+      height_ratio: nullableNumber(els.heightRatio.value),
+      height_offset_m: nullableNumber(els.heightOffset.value),
+      harvest_threshold_m: nullableNumber(els.harvestThreshold.value),
+      observation_record_number: nullableText(els.observationRecordNumber.value),
+      notes: nullableText(els.calibrationNotes.value),
+      confidence: els.calibrationConfidence.value || "low",
+      last_edited_by: currentUserEmail(),
+      last_edited_at: new Date().toISOString()
+    };
+
+    if (status === "none" && !state.selectedCalibrationId) {
+      setStatus(els.calibrationSaveStatus, "No calibration record saved because status is None.");
+      return;
+    }
+
+    setStatus(els.calibrationSaveStatus, "Saving calibration...");
+    if (state.selectedCalibrationId) {
+      await supabasePatch(TABLES.calibrationRecords, state.selectedCalibrationId, payload);
+    } else {
+      await supabaseInsert(TABLES.calibrationRecords, payload);
+    }
+
+    await loadCalibrations({ quiet: true });
+    loadCalibrationIntoForm(locationId);
+    renderLocations();
+    setStatus(els.calibrationSaveStatus, "Calibration saved.");
+  } catch (error) {
+    setStatus(els.calibrationSaveStatus, writeErrorMessage(error), "error");
+  }
 }
 
 function renderDatasetRow(row, index) {
@@ -754,21 +983,24 @@ function updateAuthUi() {
     state.hasDatasetDraft = false;
     state.editingLocationId = null;
     state.editingDatasetId = null;
+    state.selectedCalibrationId = null;
   }
 
-  document.querySelectorAll("[data-edit-location], [data-save-location], [data-edit-dataset], [data-save-dataset], [data-save-admin-user]").forEach((button) => {
+  document.querySelectorAll("[data-edit-location], [data-save-location], [data-edit-dataset], [data-save-dataset], [data-save-admin-user], [data-edit-calibration]").forEach((button) => {
     button.disabled = !signedIn;
   });
 
   if (signedIn) {
     setAuthStatus(`Signed in as ${email}. Hidden/internal rows are available if your policy allows them.`);
     renderLocations();
+    renderCalibrationPanel();
     renderAdminUsers();
     return;
   }
 
   setAuthStatus("Sign in with an approved Supabase Auth user to save changes.");
   renderLocations();
+  renderCalibrationPanel();
   renderAdminUsers();
 }
 
@@ -840,7 +1072,11 @@ function calibrationStatusForLocation(location) {
   if (!location?.id) return { value: "none", label: "None" };
 
   const summary = state.calibrations.find((row) => row.location_id === location.id);
-  const status = String(summary?.calibration_status || "none").toLowerCase();
+  return calibrationStatusForValue(summary?.calibration_status);
+}
+
+function calibrationStatusForValue(statusValue) {
+  const status = String(statusValue || "none").toLowerCase();
 
   if (status === "complete") return { value: "complete", label: "Complete" };
   if (status === "under_review") return { value: "under_review", label: "Under Review" };
@@ -850,7 +1086,19 @@ function calibrationStatusForLocation(location) {
 
 function editCalibrationLink(location) {
   if (!location?.id || !state.authSession) return "";
-  return `<a class="button-link row-action-link" href="./calibration.html?location_id=${escapeAttribute(encodeURIComponent(location.id))}">Edit calibration</a>`;
+  if (hasCalibrationPanel()) {
+    return `<button type="button" data-edit-calibration="${escapeAttribute(location.id)}">Edit calibration</button>`;
+  }
+  return `<a class="button-link row-action-link" href="./locations.html?location_id=${escapeAttribute(encodeURIComponent(location.id))}#calibration-inputs">Edit calibration</a>`;
+}
+
+function activeCalibrationForLocation(locationId) {
+  return state.calibrationRecords.find((row) => row.location_id === locationId && row.active !== false && row.status !== "retired") || null;
+}
+
+function locationLabel(location) {
+  const parts = [location.location_code, location.farm_name || location.short_name, location.region].filter(Boolean);
+  return parts.join(" - ");
 }
 
 function readOnlyStack(values) {
@@ -912,6 +1160,27 @@ function formatDateTime(value) {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function formatMinutes(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "-";
+  return `${number > 0 ? "+" : ""}${number} min`;
+}
+
+function formatMetres(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number.toFixed(3)} m` : "-";
+}
+
+function formatNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? String(number) : "-";
+}
+
+function currentUserEmail() {
+  return state.authSession?.user?.email || "signed-in admin";
 }
 
 function loadLanguageSettings() {
@@ -1162,6 +1431,11 @@ function nullableNumber(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return null;
   return number;
+}
+
+function nullableInteger(value) {
+  const number = nullableNumber(value);
+  return number === null ? null : Math.round(number);
 }
 
 function normalizeKey(value) {

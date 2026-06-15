@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260615-locations-table";
+const CACHE_VERSION = "20260615-admin-public-observations";
 const SHELL_CACHE = `seaweed-tide-planner-shell-${CACHE_VERSION}`;
 const DATA_CACHE = "seaweed-tide-planner-data-v1";
 const MAP_TILE_CACHE = "seaweed-tide-planner-map-tiles-v1";
@@ -9,6 +9,7 @@ const SHELL_ASSETS = [
   "./admin.html",
   "./admin_settings.html",
   "./locations.html",
+  "./tide_datasets.html",
   "./map.html",
   "./calibration.html",
   "./importer.html",
@@ -42,7 +43,8 @@ const SHELL_ASSETS = [
   "./assets/js/tide_core.js",
   "./assets/js/tide_data.js",
   "./assets/js/tide_format.js",
-  "./assets/js/tide_page.js"
+  "./assets/js/tide_page.js",
+  "./06_Location_Observations/2026-06-15_local_tide_observation_paper_form.pdf"
 ];
 
 self.addEventListener("install", (event) => {
@@ -105,6 +107,7 @@ function shouldBypassCache(url) {
     "index.html",
     "importer.html",
     "locations.html",
+    "tide_datasets.html",
     "observation.html",
     "admin_page.js",
     "calibration_page.js",

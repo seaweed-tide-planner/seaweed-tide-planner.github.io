@@ -6,69 +6,35 @@
   <meta name="theme-color" content="#0f766e">
   <meta name="robots" content="noindex,nofollow">
   <title>Observation Form - Seaweed Tide Planner</title>
-  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-admin-split">
+  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-admin-public-observations">
 </head>
-<body class="admin-console-page">
+<body class="observation-page">
   <header class="app-header">
     <div class="app-header-inner">
       <div>
         <p class="eyebrow">Seaweed farming tide guidance</p>
         <h1>Observation Form</h1>
       </div>
-      <div class="admin-header-controls">
+      <div class="header-actions">
         <nav class="app-nav" aria-label="Main navigation">
-          <a href="./index.html?v=20260615-admin-split">Tides</a>
-          <a href="./map.html?v=20260615-admin-split">Map</a>
+          <a href="./index.html?v=20260615-admin-public-observations">Tides</a>
+          <a href="./map.html?v=20260615-admin-public-observations">Map</a>
           <a href="./admin.html" class="desktop-admin-link">Admin</a>
         </nav>
-        <div class="admin-header-status">
-          <span id="observationConnectionStatus" class="status-pill status-muted">Connecting</span>
-          <p id="observationAuthStatus" class="admin-auth-status">Sign in with an approved Supabase admin account.</p>
-        </div>
-        <form id="observationAuthForm" class="admin-auth-inline">
-          <label>
-            Email
-            <input id="observationEmail" type="email" autocomplete="email" required>
-          </label>
-          <label>
-            Password
-            <input id="observationPassword" type="password" autocomplete="current-password" required>
-          </label>
-          <button id="observationSignIn" type="submit">Sign in</button>
-          <button id="observationSignOut" type="button">Sign out</button>
-        </form>
+        <span id="observationConnectionStatus" class="status-pill status-muted">Connecting</span>
       </div>
     </div>
   </header>
 
-  <main class="app-shell admin-shell admin-layout">
-    <aside class="admin-sidebar" aria-label="Admin menu">
-      <h2>Admin</h2>
-      <a href="./admin.html">Dashboard</a>
-
-      <p class="admin-menu-heading">Tide Planner Settings</p>
-      <a href="./admin_settings.html">Settings</a>
-
-      <p class="admin-menu-heading">Location &amp; Tide Data</p>
-      <a href="./locations.html">Locations</a>
-      <a href="./importer.html">Tide dataset importer</a>
-      <a href="./calibration.html">Location tide calibration</a>
-      <a href="./observation.html" aria-current="page">Observation form</a>
-    </aside>
-
-    <section class="admin-content">
-      <section id="observationLocked" class="panel importer-locked-card">
-        <h2>Admin sign-in required</h2>
-        <p>This form submits local tide observations to the Tide Planner Supabase database. It is only available to approved admin/operator users.</p>
-      </section>
-
-      <section id="observationWorkspace" class="panel observation-form-panel" hidden>
+  <main class="app-shell observation-shell">
+      <section id="observationWorkspace" class="panel observation-form-panel">
         <div class="section-head compact">
           <div>
             <h2>Local Tide Observation</h2>
             <p class="field-hint">Use this for simple local field observations. Raw observations do not change tide predictions until reviewed and converted into calibration values.</p>
+            <p id="observationAuthStatus" class="field-hint">Public observation form. No admin sign-in required.</p>
           </div>
-          <a class="button-link" href="./06_Location_Observations/2026-06-15_local_tide_observation_paper_form.md" target="_blank" rel="noopener">Paper form</a>
+          <a class="button-link" href="./06_Location_Observations/2026-06-15_local_tide_observation_paper_form.pdf" download>Download paper form PDF</a>
         </div>
 
         <form id="observationForm" class="observation-form">
@@ -275,14 +241,13 @@
           </div>
         </form>
       </section>
-    </section>
   </main>
 
   <footer class="marine-disclaimer-footer">
     <p><strong class="safety-label">Safety:</strong> <span class="marine-disclaimer-text">Not for marine navigation or safety-of-life decisions. Tide guidance may be wrong, stale, unverified, or affected by local weather and sea conditions. Check official/local sources and current conditions before acting.</span> <button type="button" data-disclaimer-open>Full disclaimer</button></p>
   </footer>
 
-  <script type="module" src="./assets/js/disclaimer.js?v=20260615-admin-split"></script>
-  <script type="module" src="./assets/js/observation_form.js?v=20260615-admin-split"></script>
+  <script type="module" src="./assets/js/disclaimer.js?v=20260615-admin-public-observations"></script>
+  <script type="module" src="./assets/js/observation_form.js?v=20260615-admin-public-observations"></script>
 </body>
 </html>

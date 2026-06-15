@@ -20,6 +20,10 @@ const LANGUAGE_PACKS = {
       "language.ariaLabel": "Language",
       "language.option.en": "English",
       "language.option.sw": "Kiswahili",
+      "weatherWarning.ariaLabel": "Weather warning source",
+      "weatherWarning.label": "Weather check:",
+      "weatherWarning.text": "Heavy rain, strong wind, large waves, or unusual pressure can make tide guidance less reliable and unsafe for field work.",
+      "weatherWarning.sourceLink": "Check Kenya Meteorological Department warnings",
 
       "status.loading": "Loading",
       "status.dataset": "Dataset",
@@ -260,6 +264,10 @@ const LANGUAGE_PACKS = {
       "language.ariaLabel": "Lugha",
       "language.option.en": "English",
       "language.option.sw": "Kiswahili",
+      "weatherWarning.ariaLabel": "Chanzo cha tahadhari za hali ya hewa",
+      "weatherWarning.label": "Kagua hali ya hewa:",
+      "weatherWarning.text": "Mvua kubwa, upepo mkali, mawimbi makubwa, au shinikizo la hewa lisilo la kawaida vinaweza kufanya mwongozo wa mawimbi usiwe wa kuaminika na usiwe salama kwa kazi ya shambani.",
+      "weatherWarning.sourceLink": "Kagua tahadhari za Kenya Meteorological Department",
 
       "status.loading": "Inapakia",
       "status.dataset": "Seti ya data",
