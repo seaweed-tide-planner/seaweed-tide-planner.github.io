@@ -1,4 +1,4 @@
-import { t } from "./language.js?v=20260615-dataset-import-date";
+import { t } from "./language.js?v=20260615-table-fill";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
 

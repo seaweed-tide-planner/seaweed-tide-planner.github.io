@@ -1679,15 +1679,15 @@ main.importer-shell + .marine-disclaimer-footer {
 
 .locations-management-table {
   min-width: 0;
-  width: max-content;
-  max-width: 100%;
+  width: 100%;
+  max-width: none;
   table-layout: fixed;
 }
 
 .tide-datasets-management-table {
   min-width: 0;
-  width: max-content;
-  max-width: 100%;
+  width: 100%;
+  max-width: none;
   table-layout: fixed;
 }
 
@@ -1711,6 +1711,14 @@ body:not(.admin-signed-in) [data-admin-only] {
 .tide-datasets-management-table td {
   padding-block: 4px;
   padding-inline: 6px;
+}
+
+.locations-management-table th,
+.tide-datasets-management-table th {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .locations-management-table td,
@@ -1737,62 +1745,62 @@ body:not(.admin-signed-in) [data-admin-only] {
 
 .locations-management-table th:nth-child(1),
 .locations-management-table td:nth-child(1) {
-  width: 76px;
+  width: 7.5%;
 }
 
 .locations-management-table th:nth-child(2),
 .locations-management-table td:nth-child(2) {
-  width: 230px;
+  width: 19%;
 }
 
 .locations-management-table th:nth-child(3),
 .locations-management-table td:nth-child(3) {
-  width: 250px;
+  width: 20%;
 }
 
 .locations-management-table th:nth-child(4),
 .locations-management-table td:nth-child(4) {
-  width: 132px;
+  width: 12%;
 }
 
 .locations-management-table th:nth-child(5),
 .locations-management-table td:nth-child(5) {
-  width: 108px;
+  width: 10%;
 }
 
 .locations-management-table th:nth-child(6),
 .locations-management-table td:nth-child(6) {
-  width: 90px;
+  width: 8%;
 }
 
 .locations-management-table th:nth-child(7),
 .locations-management-table td:nth-child(7) {
-  width: 90px;
+  width: 8%;
 }
 
 .locations-management-table th:nth-child(8),
 .locations-management-table td:nth-child(8) {
-  width: 102px;
+  width: 10%;
 }
 
 .locations-management-table th:nth-child(9),
 .locations-management-table td:nth-child(9) {
-  width: 66px;
+  width: 5.5%;
 }
 
 .locations-management-table[data-view="calibration"] th:nth-child(3),
 .locations-management-table[data-view="calibration"] td:nth-child(3) {
-  width: 250px;
+  width: 20%;
 }
 
 .locations-management-table[data-view="calibration"] th:nth-child(4),
 .locations-management-table[data-view="calibration"] td:nth-child(4) {
-  width: 112px;
+  width: 9%;
 }
 
 .locations-management-table[data-view="calibration"] th:nth-child(5),
 .locations-management-table[data-view="calibration"] td:nth-child(5) {
-  width: 106px;
+  width: 8%;
 }
 
 .locations-management-table[data-view="calibration"] th:nth-child(6),
@@ -1803,72 +1811,77 @@ body:not(.admin-signed-in) [data-admin-only] {
 .locations-management-table[data-view="calibration"] td:nth-child(8),
 .locations-management-table[data-view="calibration"] th:nth-child(9),
 .locations-management-table[data-view="calibration"] td:nth-child(9) {
-  width: 88px;
+  width: 6.5%;
+}
+
+.locations-management-table[data-view="calibration"] th:nth-child(9),
+.locations-management-table[data-view="calibration"] td:nth-child(9) {
+  width: 7%;
 }
 
 .locations-management-table[data-view="calibration"] th:nth-child(10),
 .locations-management-table[data-view="calibration"] td:nth-child(10) {
-  width: 168px;
+  width: 5%;
 }
 
 .locations-management-table[data-view="calibration"] th:nth-child(11),
 .locations-management-table[data-view="calibration"] td:nth-child(11) {
-  width: 66px;
+  width: 5%;
 }
 
 .tide-datasets-management-table th:nth-child(1),
 .tide-datasets-management-table td:nth-child(1) {
-  width: 82px;
+  width: 7.5%;
 }
 
 .tide-datasets-management-table th:nth-child(2),
 .tide-datasets-management-table td:nth-child(2) {
-  width: 245px;
+  width: 19%;
 }
 
 .tide-datasets-management-table th:nth-child(3),
 .tide-datasets-management-table td:nth-child(3) {
-  width: 165px;
+  width: 13%;
 }
 
 .tide-datasets-management-table th:nth-child(4),
 .tide-datasets-management-table td:nth-child(4) {
-  width: 132px;
+  width: 9%;
 }
 
 .tide-datasets-management-table th:nth-child(5),
 .tide-datasets-management-table td:nth-child(5) {
-  width: 150px;
+  width: 12%;
 }
 
 .tide-datasets-management-table th:nth-child(6),
 .tide-datasets-management-table td:nth-child(6) {
-  width: 240px;
+  width: 22%;
 }
 
 .tide-datasets-management-table th:nth-child(7),
 .tide-datasets-management-table td:nth-child(7) {
-  width: 130px;
+  width: 9.5%;
 }
 
 .tide-datasets-management-table th:nth-child(8),
 .tide-datasets-management-table td:nth-child(8) {
-  width: 105px;
+  width: 4.5%;
 }
 
 .tide-datasets-management-table th:nth-child(9),
 .tide-datasets-management-table td:nth-child(9) {
-  width: 66px;
+  width: 4%;
 }
 
 .tide-datasets-management-table[data-view="importer"] th:nth-child(3),
 .tide-datasets-management-table[data-view="importer"] td:nth-child(3) {
-  width: 150px;
+  width: 13%;
 }
 
 .tide-datasets-management-table[data-view="importer"] th:nth-child(4),
 .tide-datasets-management-table[data-view="importer"] td:nth-child(4) {
-  width: 180px;
+  width: 16%;
 }
 
 .tide-datasets-management-table[data-view="importer"] th:nth-child(5),
@@ -1877,12 +1890,17 @@ body:not(.admin-signed-in) [data-admin-only] {
 .tide-datasets-management-table[data-view="importer"] td:nth-child(6),
 .tide-datasets-management-table[data-view="importer"] th:nth-child(7),
 .tide-datasets-management-table[data-view="importer"] td:nth-child(7) {
-  width: 96px;
+  width: 9%;
+}
+
+.tide-datasets-management-table[data-view="importer"] th:nth-child(6),
+.tide-datasets-management-table[data-view="importer"] td:nth-child(6) {
+  width: 8%;
 }
 
 .tide-datasets-management-table[data-view="importer"] th:nth-child(8),
 .tide-datasets-management-table[data-view="importer"] td:nth-child(8) {
-  width: 180px;
+  width: 18.5%;
 }
 
 .admin-data-table input,
