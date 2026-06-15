@@ -1581,7 +1581,7 @@ main.importer-shell + .marine-disclaimer-footer {
 }
 
 .locations-management-table {
-  min-width: 1880px;
+  min-width: 2040px;
 }
 
 .admin-data-table th {
@@ -1601,6 +1601,11 @@ body:not(.admin-signed-in) [data-admin-only] {
 .locations-management-table th,
 .locations-management-table td {
   padding-block: 4px;
+  padding-inline: 5px;
+}
+
+.locations-management-table td {
+  min-width: 104px;
 }
 
 .admin-data-table input,

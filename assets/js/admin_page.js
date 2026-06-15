@@ -281,7 +281,7 @@ function renderLocations() {
   els.locationCount.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"}`;
 
   if (!rows.length) {
-    els.locationsTableBody.innerHTML = emptyRow(11, "No visible locations returned from Supabase.");
+    els.locationsTableBody.innerHTML = emptyRow(10, "No visible locations returned from Supabase.");
     return;
   }
 
@@ -347,7 +347,6 @@ function renderLocationRow(row, index) {
         <td>${readOnlyCell(formatCoordinate(row.latitude))}</td>
         <td>${readOnlyCell(formatCoordinate(row.longitude))}</td>
         <td>${readOnlyCell(datasetLabel(row.default_tide_dataset_id || row.default_tide_dataset_key))}</td>
-        <td>${readOnlyCell(formatThreshold(row.default_harvest_threshold_m))}</td>
         <td>${calibrationStatusCell(row)}</td>
         <td>${readOnlyCell(recordUseLabel(row, "Shown in app"))}</td>
         <td class="save-cell" data-admin-only>
@@ -369,7 +368,6 @@ function renderLocationRow(row, index) {
       <td>${numberInput("latitude", row.latitude, "latitude", "-90", "90", "0.000001")}</td>
       <td>${numberInput("longitude", row.longitude, "longitude", "-180", "180", "0.000001")}</td>
       <td>${selectInput("default_tide_dataset_id", selectedDatasetId, datasetOptions)}</td>
-      <td>${numberInput("default_harvest_threshold_m", row.default_harvest_threshold_m ?? 0.7, "threshold", "0", "5", "0.05")}</td>
       <td>${calibrationStatusCell(row)}</td>
       <td>${selectInput("app_use", locationUseValue(row), locationUseOptions())}</td>
       <td class="save-cell" data-admin-only>
@@ -464,7 +462,6 @@ async function saveLocationRow(rowElement) {
       latitude: nullableNumber(rowValue(rowElement, "latitude")),
       longitude: nullableNumber(rowValue(rowElement, "longitude")),
       default_tide_dataset_key: selectedDataset?.dataset_key || null,
-      default_harvest_threshold_m: nullableNumber(rowValue(rowElement, "default_harvest_threshold_m")) ?? 0.7,
       status: locationStatusForUse(appUse, current.status),
       public_visible: appUse === "public",
       active: appUse !== "inactive",
