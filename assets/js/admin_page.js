@@ -16,8 +16,6 @@ const LOCATION_TABLE_VIEWS = {
   metadata: [
     "Location ID",
     "Name",
-    "Associated tide dataset",
-    "Calibration status",
     "Short name",
     "Region",
     "Latitude",
@@ -30,6 +28,7 @@ const LOCATION_TABLE_VIEWS = {
     "Name",
     "Associated tide dataset",
     "Calibration status",
+    "Harvest threshold",
     "Low offset",
     "High offset",
     "Height ratio",
@@ -493,19 +492,12 @@ function renderLocationRow(row, index) {
 
 function renderLocationMetadataRow(row, index, rowId, rowClass, isEditing) {
   const isNew = !row.id;
-  const datasetOptions = [
-    ["", "Not linked"],
-    ...state.datasets.map((dataset) => [dataset.id, dataset.dataset_name])
-  ];
-  const selectedDatasetId = row.default_tide_dataset_id || datasetIdForKey(row.default_tide_dataset_key);
 
   if (!isEditing) {
     return `
       <tr data-row-id="${escapeAttribute(rowId)}" data-row-kind="location" class="${rowClass}">
         <td class="id-cell">${locationIdCell(row, index)}</td>
         <td>${readOnlyCell(row.farm_name)}</td>
-        <td>${readOnlyCell(datasetLabel(row.default_tide_dataset_id || row.default_tide_dataset_key))}</td>
-        <td>${calibrationStatusCell(row)}</td>
         <td>${readOnlyCell(row.short_name)}</td>
         <td>${readOnlyCell(row.region)}</td>
         <td>${readOnlyCell(formatCoordinate(row.latitude))}</td>
@@ -524,8 +516,6 @@ function renderLocationMetadataRow(row, index, rowId, rowClass, isEditing) {
     <tr data-row-id="${escapeAttribute(rowId)}" data-row-kind="location" class="${rowClass}">
       <td class="id-cell">${locationIdCell(row, index)}</td>
       <td>${textInput("farm_name", row.farm_name, "name")}</td>
-      <td>${selectInput("default_tide_dataset_id", selectedDatasetId, datasetOptions)}</td>
-      <td>${calibrationStatusCell(row)}</td>
       <td>${textInput("short_name", row.short_name, "short name")}</td>
       <td>${textInput("region", row.region, "region")}</td>
       <td>${numberInput("latitude", row.latitude, "latitude", "-90", "90", "0.000001")}</td>
@@ -543,6 +533,7 @@ function renderLocationMetadataRow(row, index, rowId, rowClass, isEditing) {
 function renderLocationCalibrationRow(row, index, rowId, rowClass) {
   const summary = calibrationSummaryForLocation(row);
   const evidence = calibrationEvidence(summary);
+  const harvestThreshold = summary.harvest_threshold_m ?? row.default_harvest_threshold_m;
   const selectedClass = row.id && row.id === els.calibrationLocation?.value ? "editing-row" : "";
   const classes = [rowClass, selectedClass].filter(Boolean).join(" ");
 
@@ -552,6 +543,7 @@ function renderLocationCalibrationRow(row, index, rowId, rowClass) {
       <td>${readOnlyCell(row.farm_name)}</td>
       <td>${readOnlyCell(datasetLabel(summary.reference_dataset_id || row.default_tide_dataset_id || row.default_tide_dataset_key) || summary.reference_dataset_name || "Location default")}</td>
       <td>${calibrationStatusCell(row)}</td>
+      <td>${readOnlyCell(formatMetres(harvestThreshold))}</td>
       <td>${readOnlyCell(formatMinutes(summary.low_tide_time_offset_minutes))}</td>
       <td>${readOnlyCell(formatMinutes(summary.high_tide_time_offset_minutes))}</td>
       <td>${readOnlyCell(formatNumber(summary.height_ratio))}</td>
@@ -749,7 +741,10 @@ async function saveLocationRow(rowElement) {
     const appUse = rowValue(rowElement, "app_use");
     const farmName = requiredText(rowValue(rowElement, "farm_name"), "Location name");
     const shortName = nullableText(rowValue(rowElement, "short_name"));
-    const selectedDatasetId = nullableText(rowValue(rowElement, "default_tide_dataset_id"));
+    const hasDatasetField = rowHasField(rowElement, "default_tide_dataset_id");
+    const selectedDatasetId = hasDatasetField
+      ? nullableText(rowValue(rowElement, "default_tide_dataset_id"))
+      : current.default_tide_dataset_id || datasetIdForKey(current.default_tide_dataset_key) || null;
     const selectedDataset = datasetById(selectedDatasetId);
     const payload = {
       farm_location_key: normalizeKey(shortName || farmName),
@@ -758,7 +753,7 @@ async function saveLocationRow(rowElement) {
       region: requiredText(rowValue(rowElement, "region") || current.region || "Kwale County", "Region"),
       latitude: nullableNumber(rowValue(rowElement, "latitude")),
       longitude: nullableNumber(rowValue(rowElement, "longitude")),
-      default_tide_dataset_key: selectedDataset?.dataset_key || null,
+      default_tide_dataset_key: selectedDataset?.dataset_key || current.default_tide_dataset_key || null,
       status: locationStatusForUse(appUse, current.status),
       public_visible: appUse === "public",
       active: appUse !== "inactive",
@@ -1440,6 +1435,10 @@ function rowValue(rowElement, field) {
   if (!input) return "";
   if (input.type === "checkbox") return input.checked;
   return input.value;
+}
+
+function rowHasField(rowElement, field) {
+  return !!rowElement.querySelector(`[data-field="${field}"]`);
 }
 
 function setConnectionStatus(text, extraClass) {
