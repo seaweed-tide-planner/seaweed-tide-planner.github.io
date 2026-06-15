@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f766e">
   <meta name="robots" content="noindex,nofollow">
   <title>Site Locations - Seaweed Tide Planner</title>
-  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-site-table-tight">
+  <link rel="stylesheet" href="./assets/css/tides.css?v=20260615-location-table-pages">
 </head>
 <body class="admin-console-page">
   <header class="app-header">
@@ -17,8 +17,8 @@
       </div>
       <div class="admin-header-controls compact">
         <nav class="app-nav" aria-label="Main navigation">
-          <a href="./index.html?v=20260615-site-table-tight">Tides</a>
-          <a href="./map.html?v=20260615-site-table-tight">Map</a>
+          <a href="./index.html?v=20260615-location-table-pages">Tides</a>
+          <a href="./map.html?v=20260615-location-table-pages">Map</a>
           <a href="./admin.html" class="desktop-admin-link">Admin</a>
         </nav>
         <div class="admin-header-status">
@@ -48,8 +48,14 @@
     <section class="admin-content">
       <details id="locations" class="admin-management-card" open>
         <summary class="admin-card-summary">
-          <span>
-            <strong>Site locations</strong>
+          <span class="admin-summary-title-block">
+            <span class="admin-summary-title-row">
+              <strong>Site locations</strong>
+              <span class="location-table-view-toggle" aria-label="Site locations table view">
+                <button id="locationMetadataView" type="button" data-location-table-view="metadata" aria-pressed="true">Meta data (page 1)</button>
+                <button id="locationCalibrationView" type="button" data-location-table-view="calibration" aria-pressed="false">Calibration data (page 2)</button>
+              </span>
+            </span>
             <small>Site locations shown to users</small>
           </span>
           <span id="locationCount" class="status-pill">0 rows</span>
@@ -64,20 +70,7 @@
 
           <div class="responsive-table-wrap">
             <table class="management-table admin-data-table locations-management-table">
-              <thead>
-                <tr>
-                  <th>Location ID</th>
-                  <th>Name</th>
-                  <th>Short name</th>
-                  <th>Region</th>
-                  <th>Latitude</th>
-                  <th>Longitude</th>
-                  <th>Associated tide dataset</th>
-                  <th>Tide calibration</th>
-                  <th>App use</th>
-                  <th data-admin-only>Action</th>
-                </tr>
-              </thead>
+              <thead id="locationsTableHead"></thead>
               <tbody id="locationsTableBody"></tbody>
             </table>
           </div>
@@ -175,34 +168,6 @@
         </form>
       </section>
 
-      <section id="calibration-table" class="panel">
-        <div class="section-head compact">
-          <div>
-            <h2>Location Calibration Table</h2>
-            <p class="field-hint">Compact summary of calibration status by site location. Click Edit to load a row above.</p>
-          </div>
-          <span id="calibrationRowCount" class="status-pill">0 rows</span>
-        </div>
-        <div class="responsive-table-wrap">
-          <table class="management-table admin-data-table calibration-table">
-            <thead>
-              <tr>
-                <th>Location ID</th>
-                <th>Location name</th>
-                <th>Status</th>
-                <th>Reference dataset</th>
-                <th>Low offset</th>
-                <th>High offset</th>
-                <th>Height ratio</th>
-                <th>Height offset</th>
-                <th>Evidence</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="calibrationTableBody"></tbody>
-          </table>
-        </div>
-      </section>
     </section>
   </main>
 
@@ -232,7 +197,7 @@
     <p><strong class="safety-label">Safety:</strong> <span class="marine-disclaimer-text">Not for marine navigation or safety-of-life decisions. Tide guidance may be wrong, stale, unverified, or affected by local weather and sea conditions. Check official/local sources and current conditions before acting.</span> <button type="button" data-disclaimer-open>Full disclaimer</button></p>
   </footer>
 
-  <script type="module" src="./assets/js/disclaimer.js?v=20260615-site-table-tight"></script>
-  <script type="module" src="./assets/js/admin_page.js?v=20260615-site-table-tight"></script>
+  <script type="module" src="./assets/js/disclaimer.js?v=20260615-location-table-pages"></script>
+  <script type="module" src="./assets/js/admin_page.js?v=20260615-location-table-pages"></script>
 </body>
 </html>

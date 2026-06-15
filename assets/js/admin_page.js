@@ -12,6 +12,32 @@ const AUTH_SESSION_KEY = "seaweed_tide_planner:admin_auth_session";
 const LANGUAGE_SETTINGS_KEY = "seaweed_tide_planner:admin_language_status";
 const NEW_LOCATION_ID = "__new_location__";
 const NEW_DATASET_ID = "__new_dataset__";
+const LOCATION_TABLE_VIEWS = {
+  metadata: [
+    "Location ID",
+    "Name",
+    "Associated tide dataset",
+    "Calibration status",
+    "Short name",
+    "Region",
+    "Latitude",
+    "Longitude",
+    "App use",
+    "Action"
+  ],
+  calibration: [
+    "Location ID",
+    "Name",
+    "Associated tide dataset",
+    "Calibration status",
+    "Low offset",
+    "High offset",
+    "Height ratio",
+    "Height offset",
+    "Evidence",
+    "Action"
+  ]
+};
 
 const DATASET_STATUSES = [
   "imported_unverified",
@@ -30,6 +56,7 @@ const state = {
   authSession: null,
   hasLocationDraft: false,
   hasDatasetDraft: false,
+  locationTableView: "metadata",
   editingLocationId: null,
   editingDatasetId: null,
   selectedCalibrationId: null,
@@ -76,7 +103,10 @@ function cacheElements() {
     "datasetCount",
     "locationSaveStatus",
     "datasetSaveStatus",
+    "locationsTableHead",
     "locationsTableBody",
+    "locationMetadataView",
+    "locationCalibrationView",
     "datasetsTableBody",
     "reloadLocations",
     "reloadDatasets",
@@ -102,9 +132,7 @@ function cacheElements() {
     "observationRecordNumber",
     "lastEditedBy",
     "calibrationNotes",
-    "calibrationSaveStatus",
-    "calibrationRowCount",
-    "calibrationTableBody"
+    "calibrationSaveStatus"
   ].forEach((id) => {
     els[id] = document.getElementById(id);
   });
@@ -125,6 +153,13 @@ function bindEvents() {
   els.reloadAdminUsers?.addEventListener("click", () => loadAdminUsers());
   els.reloadAdminDashboard?.addEventListener("click", () => loadAll());
   els.reloadCalibration?.addEventListener("click", () => loadCalibrationPanelData());
+  document.querySelectorAll("[data-location-table-view]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setLocationTableView(button.dataset.locationTableView);
+    });
+  });
 
   document.querySelectorAll("[data-language-status]").forEach((select) => {
     select.addEventListener("change", saveLanguageSettings);
@@ -135,6 +170,7 @@ function bindEvents() {
       setStatus(els.locationSaveStatus, "Sign in before adding a location.", "error");
       return;
     }
+    state.locationTableView = "metadata";
     state.hasLocationDraft = true;
     state.editingLocationId = NEW_LOCATION_ID;
     renderLocations();
@@ -173,6 +209,7 @@ function bindEvents() {
       }
       loadCalibrationIntoForm(calibrationButton.dataset.editCalibration);
       els.calibrationForm?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setStatus(els.locationSaveStatus, "Calibration row loaded below. Save from the Calibration Inputs card.");
       return;
     }
 
@@ -214,12 +251,6 @@ function bindEvents() {
     await saveCalibration();
   });
 
-  els.calibrationTableBody?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-edit-calibration]");
-    if (!button) return;
-    loadCalibrationIntoForm(button.dataset.editCalibration);
-    els.calibrationForm?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
 }
 
 async function loadAll() {
@@ -362,14 +393,53 @@ function datasetExpiresWithinMonths(dataset, monthCount) {
 function renderLocations() {
   const rows = state.hasLocationDraft ? [defaultLocation(), ...state.locations] : state.locations;
   if (!els.locationCount || !els.locationsTableBody) return;
+  renderLocationTableHead();
+  updateLocationTableViewButtons();
   els.locationCount.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"}`;
 
   if (!rows.length) {
-    els.locationsTableBody.innerHTML = emptyRow(10, "No visible locations returned from Supabase.");
+    els.locationsTableBody.innerHTML = emptyRow(locationTableColumnCount(), "No visible locations returned from Supabase.");
     return;
   }
 
   els.locationsTableBody.innerHTML = rows.map((row, index) => renderLocationRow(row, index)).join("");
+}
+
+function renderLocationTableHead() {
+  if (!els.locationsTableHead) return;
+  const headings = LOCATION_TABLE_VIEWS[state.locationTableView] || LOCATION_TABLE_VIEWS.metadata;
+  els.locationsTableHead.innerHTML = `
+    <tr>
+      ${headings.map((heading, index) => `<th${index === headings.length - 1 ? " data-admin-only" : ""}>${escapeHtml(heading)}</th>`).join("")}
+    </tr>
+  `;
+  els.locationsTableHead.closest("table")?.setAttribute("data-view", state.locationTableView);
+}
+
+function locationTableColumnCount() {
+  return (LOCATION_TABLE_VIEWS[state.locationTableView] || LOCATION_TABLE_VIEWS.metadata).length;
+}
+
+function updateLocationTableViewButtons() {
+  document.querySelectorAll("[data-location-table-view]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.locationTableView === state.locationTableView));
+  });
+}
+
+function setLocationTableView(view) {
+  if (!LOCATION_TABLE_VIEWS[view]) return;
+  state.locationTableView = view;
+  if (view === "calibration" && state.editingLocationId === NEW_LOCATION_ID) {
+    state.hasLocationDraft = false;
+  }
+  state.editingLocationId = null;
+  renderLocations();
+  setStatus(
+    els.locationSaveStatus,
+    view === "calibration"
+      ? "Showing calibration data. Click Edit to load a location into the Calibration Inputs card."
+      : "Showing site location metadata."
+  );
 }
 
 function renderAdminUsers() {
@@ -415,6 +485,14 @@ function renderLocationRow(row, index) {
   const rowId = isNew ? NEW_LOCATION_ID : row.id;
   const isEditing = rowId === state.editingLocationId;
   const rowClass = [isNew ? "draft-row" : "", isEditing ? "editing-row" : ""].filter(Boolean).join(" ");
+  if (state.locationTableView === "calibration") {
+    return renderLocationCalibrationRow(row, index, rowId, rowClass);
+  }
+  return renderLocationMetadataRow(row, index, rowId, rowClass, isEditing);
+}
+
+function renderLocationMetadataRow(row, index, rowId, rowClass, isEditing) {
+  const isNew = !row.id;
   const datasetOptions = [
     ["", "Not linked"],
     ...state.datasets.map((dataset) => [dataset.id, dataset.dataset_name])
@@ -426,17 +504,16 @@ function renderLocationRow(row, index) {
       <tr data-row-id="${escapeAttribute(rowId)}" data-row-kind="location" class="${rowClass}">
         <td class="id-cell">${locationIdCell(row, index)}</td>
         <td>${readOnlyCell(row.farm_name)}</td>
+        <td>${readOnlyCell(datasetLabel(row.default_tide_dataset_id || row.default_tide_dataset_key))}</td>
+        <td>${calibrationStatusCell(row)}</td>
         <td>${readOnlyCell(row.short_name)}</td>
         <td>${readOnlyCell(row.region)}</td>
         <td>${readOnlyCell(formatCoordinate(row.latitude))}</td>
         <td>${readOnlyCell(formatCoordinate(row.longitude))}</td>
-        <td>${readOnlyCell(datasetLabel(row.default_tide_dataset_id || row.default_tide_dataset_key))}</td>
-        <td>${calibrationStatusCell(row)}</td>
         <td>${readOnlyCell(recordUseLabel(row, "Shown in app"))}</td>
         <td class="save-cell" data-admin-only>
           <div class="row-action-stack">
             <button type="button" data-edit-location ${state.authSession ? "" : "disabled"}>Edit</button>
-            ${editCalibrationLink(row)}
           </div>
         </td>
       </tr>
@@ -447,17 +524,42 @@ function renderLocationRow(row, index) {
     <tr data-row-id="${escapeAttribute(rowId)}" data-row-kind="location" class="${rowClass}">
       <td class="id-cell">${locationIdCell(row, index)}</td>
       <td>${textInput("farm_name", row.farm_name, "name")}</td>
+      <td>${selectInput("default_tide_dataset_id", selectedDatasetId, datasetOptions)}</td>
+      <td>${calibrationStatusCell(row)}</td>
       <td>${textInput("short_name", row.short_name, "short name")}</td>
       <td>${textInput("region", row.region, "region")}</td>
       <td>${numberInput("latitude", row.latitude, "latitude", "-90", "90", "0.000001")}</td>
       <td>${numberInput("longitude", row.longitude, "longitude", "-180", "180", "0.000001")}</td>
-      <td>${selectInput("default_tide_dataset_id", selectedDatasetId, datasetOptions)}</td>
-      <td>${calibrationStatusCell(row)}</td>
       <td>${selectInput("app_use", locationUseValue(row), locationUseOptions())}</td>
       <td class="save-cell" data-admin-only>
         <div class="row-action-stack">
           <button type="button" data-save-location ${state.authSession ? "" : "disabled"}>${isNew ? "Create" : "Save"}</button>
-          ${editCalibrationLink(row)}
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function renderLocationCalibrationRow(row, index, rowId, rowClass) {
+  const summary = calibrationSummaryForLocation(row);
+  const evidence = calibrationEvidence(summary);
+  const selectedClass = row.id && row.id === els.calibrationLocation?.value ? "editing-row" : "";
+  const classes = [rowClass, selectedClass].filter(Boolean).join(" ");
+
+  return `
+    <tr data-row-id="${escapeAttribute(rowId)}" data-row-kind="location" class="${classes}">
+      <td class="id-cell">${locationIdCell(row, index)}</td>
+      <td>${readOnlyCell(row.farm_name)}</td>
+      <td>${readOnlyCell(datasetLabel(summary.reference_dataset_id || row.default_tide_dataset_id || row.default_tide_dataset_key) || summary.reference_dataset_name || "Location default")}</td>
+      <td>${calibrationStatusCell(row)}</td>
+      <td>${readOnlyCell(formatMinutes(summary.low_tide_time_offset_minutes))}</td>
+      <td>${readOnlyCell(formatMinutes(summary.high_tide_time_offset_minutes))}</td>
+      <td>${readOnlyCell(formatNumber(summary.height_ratio))}</td>
+      <td>${readOnlyCell(formatMetres(summary.height_offset_m))}</td>
+      <td>${readOnlyCell(evidence)}</td>
+      <td class="save-cell" data-admin-only>
+        <div class="row-action-stack">
+          ${row.id ? `<button type="button" data-edit-calibration="${escapeAttribute(row.id)}" ${state.authSession ? "" : "disabled"}>Edit</button>` : `<button type="button" disabled>Edit</button>`}
         </div>
       </td>
     </tr>
@@ -481,7 +583,6 @@ function renderDatasets() {
 function renderCalibrationPanel() {
   if (!hasCalibrationPanel()) return;
   renderCalibrationSelects();
-  renderCalibrationTable();
 
   if (!els.calibrationLocation?.value && state.locations.length) {
     openInitialCalibrationLocation();
@@ -489,7 +590,7 @@ function renderCalibrationPanel() {
 }
 
 function hasCalibrationPanel() {
-  return !!(els.calibrationForm || els.calibrationTableBody);
+  return !!els.calibrationForm;
 }
 
 function renderCalibrationSelects() {
@@ -515,39 +616,6 @@ function renderCalibrationSelects() {
       })
     ].join("");
   }
-}
-
-function renderCalibrationTable() {
-  if (!els.calibrationRowCount || !els.calibrationTableBody) return;
-  els.calibrationRowCount.textContent = `${state.calibrations.length} row${state.calibrations.length === 1 ? "" : "s"}`;
-  els.calibrationTableBody.innerHTML = state.calibrations.length
-    ? state.calibrations.map(renderCalibrationRow).join("")
-    : emptyRow(10, "No site locations found.");
-}
-
-function renderCalibrationRow(row) {
-  const status = calibrationStatusForValue(row.calibration_status);
-  const evidence = [
-    row.observation_record_number ? `record: ${row.observation_record_number}` : "",
-    row.confidence ? `confidence: ${row.confidence}` : "",
-    row.last_edited_by ? `edited: ${row.last_edited_by}` : ""
-  ].filter(Boolean).join("; ");
-  const selectedClass = row.location_id === els.calibrationLocation?.value ? "editing-row" : "";
-
-  return `
-    <tr class="${selectedClass}">
-      <td>${escapeHtml(row.location_code || shortId(row.location_id))}</td>
-      <td><strong>${escapeHtml(row.location_name || "")}</strong></td>
-      <td><span class="status-pill calibration-status-pill" data-status="${escapeAttribute(status.value)}">${escapeHtml(status.label)}</span></td>
-      <td>${escapeHtml(row.reference_dataset_name || "Location default")}</td>
-      <td>${formatMinutes(row.low_tide_time_offset_minutes)}</td>
-      <td>${formatMinutes(row.high_tide_time_offset_minutes)}</td>
-      <td>${formatNumber(row.height_ratio)}</td>
-      <td>${formatMetres(row.height_offset_m)}</td>
-      <td>${escapeHtml(evidence || "-")}</td>
-      <td><button type="button" data-edit-calibration="${escapeAttribute(row.location_id)}" ${state.authSession ? "" : "disabled"}>Edit</button></td>
-    </tr>
-  `;
 }
 
 function openInitialCalibrationLocation() {
@@ -576,7 +644,7 @@ function loadCalibrationIntoForm(locationId) {
   els.observationRecordNumber.value = valueOrEmpty(calibration?.observation_record_number);
   els.lastEditedBy.value = valueOrEmpty(calibration?.last_edited_by || currentUserEmail());
   els.calibrationNotes.value = valueOrEmpty(calibration?.notes);
-  renderCalibrationTable();
+  renderLocations();
 }
 
 async function saveCalibration() {
@@ -1084,16 +1152,21 @@ function calibrationStatusForValue(statusValue) {
   return { value: "none", label: "None" };
 }
 
-function editCalibrationLink(location) {
-  if (!location?.id || !state.authSession) return "";
-  if (hasCalibrationPanel()) {
-    return `<button type="button" data-edit-calibration="${escapeAttribute(location.id)}">Edit calibration</button>`;
-  }
-  return `<a class="button-link row-action-link" href="./locations.html?location_id=${escapeAttribute(encodeURIComponent(location.id))}#calibration-inputs">Edit calibration</a>`;
-}
-
 function activeCalibrationForLocation(locationId) {
   return state.calibrationRecords.find((row) => row.location_id === locationId && row.active !== false && row.status !== "retired") || null;
+}
+
+function calibrationSummaryForLocation(location) {
+  if (!location?.id) return {};
+  return state.calibrations.find((row) => row.location_id === location.id) || {};
+}
+
+function calibrationEvidence(calibration) {
+  return [
+    calibration?.observation_record_number ? `record: ${calibration.observation_record_number}` : "",
+    calibration?.confidence ? `confidence: ${calibration.confidence}` : "",
+    calibration?.last_edited_by ? `edited: ${calibration.last_edited_by}` : ""
+  ].filter(Boolean).join("; ");
 }
 
 function locationLabel(location) {
