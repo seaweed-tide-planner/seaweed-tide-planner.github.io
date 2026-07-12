@@ -1,4 +1,4 @@
-import { t } from "./language.js?v=20260615-threshold-incomplete";
+import { t } from "./language.js?v=20260712-night-bands-swahili";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
 

@@ -1,11 +1,11 @@
-import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260615-threshold-incomplete";
-import { t, translateDataText } from "./language.js?v=20260615-threshold-incomplete";
+import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260712-night-bands-swahili";
+import { t, translateDataText } from "./language.js?v=20260712-night-bands-swahili";
 import {
   isOfflineStorageSupported,
   listFarmLocationOfflineBundles
 } from "./offline_store.js?v=20260611-pwa-foundation";
 
-const TIDE_PAGE_VERSION = "20260615-threshold-incomplete";
+const TIDE_PAGE_VERSION = "20260712-night-bands-swahili";
 
 const KENYA_COAST_VIEW = {
   center: [-4.45, 39.45],
@@ -404,8 +404,9 @@ function renderMap(mappedFarms, tideReferences) {
 
   mappedFarms.forEach((location) => {
     const position = [location.latitude, location.longitude];
+    const type = locationMapType(location);
 
-    const marker = window.L.marker(position, { icon: markerIcon("farm", "&#127807;") })
+    const marker = window.L.marker(position, { icon: markerIcon(type, locationMarkerSymbol(type)) })
       .addTo(map)
       .bindPopup(renderFarmPopup(location));
     markersByKey.set(markerKey("farm", location.key), marker);
@@ -440,6 +441,27 @@ function setActiveListItem(key) {
   document.querySelectorAll("[data-focus-marker]").forEach((item) => {
     item.classList.toggle("active", item.dataset.focusMarker === key);
   });
+}
+
+function locationMapType(location) {
+  if (location?.locationType === "lodge") return "lodge";
+
+  const locationText = [
+    location?.key,
+    location?.databaseKey,
+    location?.name,
+    location?.shortName,
+    location?.notes,
+    location?.gpsLabel
+  ].join(" ").toLowerCase();
+
+  return locationText.includes("lodge") || locationText.includes("hotel") || locationText.includes("resort")
+    ? "lodge"
+    : "farm";
+}
+
+function locationMarkerSymbol(type) {
+  return type === "lodge" ? "&#127976;" : "&#127807;";
 }
 
 function markerIcon(type, symbolHtml) {
@@ -517,8 +539,9 @@ function renderLocationTable(records, rowRenderer) {
 
 function renderMappedLocationRow(location) {
   const name = translateDataText(location.name);
+  const type = locationMapType(location);
   return `
-    <tr class="map-location-row farm" tabindex="0" role="button" data-focus-marker="${escapeAttribute(markerKey("farm", location.key))}" aria-label="${escapeAttribute(t("map.showOnMap", { name }))}">
+    <tr class="map-location-row ${escapeAttribute(type)}" tabindex="0" role="button" data-focus-marker="${escapeAttribute(markerKey("farm", location.key))}" aria-label="${escapeAttribute(t("map.showOnMap", { name }))}">
       <td><strong>${escapeHtml(name)}</strong></td>
       <td>${escapeHtml(translateDataText(location.regionCountry))}</td>
       <td>${escapeHtml(formatCoordinatePair(location.latitude, location.longitude))}</td>

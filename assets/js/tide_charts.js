@@ -7,7 +7,7 @@ import {
   localDateKey,
   startOfMonthKey
 } from "./tide_format.js";
-import { getLocale, t } from "./language.js?v=20260615-threshold-incomplete";
+import { getLocale, t } from "./language.js?v=20260712-night-bands-swahili";
 
 const COLORS = {
   line: "#3b82f6",
@@ -21,6 +21,7 @@ const COLORS = {
   thresholdFill: "rgba(22, 163, 74, 0.20)",
   thresholdSoftFill: "rgba(34, 197, 94, 0.08)",
   thresholdBorder: "rgba(22, 163, 74, 0.48)",
+  night: "rgba(15, 23, 42, 0.075)",
   now: "#ef4444"
 };
 
@@ -122,6 +123,8 @@ export function renderTideChart(canvas, curve, extremes, options = {}) {
   if (options.timeGrid === "month" && options.monthBanding !== false) {
     drawMonthBackgroundBands(ctx, pad, plotW, plotH, x, minTime, maxTime, options.timeZone);
   }
+
+  drawNightBands(ctx, options.nightBands, x, pad, plotW, plotH, options);
 
   if (options.thresholdEnabled && Number.isFinite(threshold)) {
     const thresholdY = y(threshold);
@@ -351,6 +354,34 @@ function drawMonthBackgroundBands(ctx, pad, plotW, plotH, x, minTime, maxTime, t
 
     monthKey = nextMonthKey;
     index += 1;
+  }
+
+  ctx.restore();
+}
+
+function drawNightBands(ctx, bands, x, pad, plotW, plotH, options = {}) {
+  if (!Array.isArray(bands) || !bands.length) return;
+
+  const chartLeft = pad.left;
+  const chartRight = pad.left + plotW;
+  const chartTop = pad.top;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(chartLeft, chartTop, plotW, plotH);
+  ctx.clip();
+  ctx.fillStyle = options.nightBandColor || COLORS.night;
+
+  for (const band of bands) {
+    const start = getWindowTime(band.start);
+    const end = getWindowTime(band.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+
+    const left = Math.max(chartLeft, x(start));
+    const right = Math.min(chartRight, x(end));
+    if (right > left) {
+      ctx.fillRect(left, chartTop, right - left, plotH);
+    }
   }
 
   ctx.restore();

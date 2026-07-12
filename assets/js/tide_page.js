@@ -6,7 +6,7 @@ import {
   loadPublicFarmLocations,
   loadPublicTideDatasetBundle,
   loadPublicTideReferences
-} from "./tide_data.js?v=20260615-threshold-incomplete";
+} from "./tide_data.js?v=20260712-night-bands-swahili";
 import {
   getFarmLocationOfflineBundle,
   isOfflineStorageSupported,
@@ -41,13 +41,13 @@ import {
   startOfMonthKey,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260615-threshold-incomplete";
+import { renderTideChart } from "./tide_charts.js?v=20260712-night-bands-swahili";
 import {
   getLocale,
   t,
   translateDataText,
   translateStatusLabel
-} from "./language.js?v=20260615-threshold-incomplete";
+} from "./language.js?v=20260712-night-bands-swahili";
 
 const state = {
   location: null,
@@ -103,6 +103,7 @@ const LEGACY_LOCATION_KEY_ALIASES = {
 const MOBILE_QUERY = window.matchMedia("(max-width: 620px)");
 const SYMBOLS = {
   plant: "\uD83C\uDF3F",
+  lodge: "\uD83C\uDFE8",
   tideReference: "\u2248",
   newMoon: "\uD83C\uDF11",
   fullMoon: "\uD83C\uDF15",
@@ -711,7 +712,7 @@ function renderLocationSummary() {
   if (els.selectedLocationIcon) {
     els.selectedLocationIcon.textContent = isTideReferenceLocation(location)
       ? SYMBOLS.tideReference
-      : SYMBOLS.plant;
+      : locationSymbol(location);
   }
   if (els.selectedLocationName) {
     els.selectedLocationName.textContent = translateDataText(location.name);
@@ -740,8 +741,12 @@ function renderLocationSummary() {
 
 }
 
+function locationSymbol(location) {
+  return location?.locationType === "lodge" ? SYMBOLS.lodge : SYMBOLS.plant;
+}
+
 function mapUrl(location) {
-  return `./map.html?v=20260615-threshold-incomplete&location=${encodeURIComponent(location.key)}`;
+  return `./map.html?v=20260712-night-bands-swahili&location=${encodeURIComponent(location.key)}`;
 }
 
 function referenceStationLabel(profile) {
@@ -1226,6 +1231,50 @@ function solarTimes(date, latitude, longitude, timeZone) {
   };
 }
 
+function buildNightBandsForRange(startDate, endDate, timeZone, coordinates) {
+  const bands = [];
+  const zone = timeZone || "UTC";
+  let dateKey = localDateKey(startDate, zone);
+  const endKey = localDateKey(endDate, zone);
+
+  while (dateKey <= endKey) {
+    const dayStart = zonedDateKeyToDate(dateKey, zone);
+    const nextDateKey = addDaysToDateKey(dateKey, 1);
+    const nextDayStart = zonedDateKeyToDate(nextDateKey, zone);
+    const solar = coordinates
+      ? solarTimes(new Date(dayStart.getTime() + 12 * 3600000), coordinates.lat, coordinates.lon, zone)
+      : null;
+    const fallback = fallbackSolarTimes(dateKey, zone);
+    const sunrise = solar?.sunrise || fallback.sunrise;
+    const sunset = solar?.sunset || fallback.sunset;
+
+    addClippedNightBand(bands, dayStart, sunrise, startDate, endDate);
+    addClippedNightBand(bands, sunset, nextDayStart, startDate, endDate);
+    dateKey = nextDateKey;
+  }
+
+  return bands;
+}
+
+function fallbackSolarTimes(dateKey, timeZone) {
+  return {
+    sunrise: zonedDateKeyToDate(dateKey, timeZone, 6, 15),
+    sunset: zonedDateKeyToDate(dateKey, timeZone, 18, 30)
+  };
+}
+
+function addClippedNightBand(bands, start, end, rangeStart, rangeEnd) {
+  if (!(start instanceof Date) || !(end instanceof Date) || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
+    return;
+  }
+
+  const clippedStart = new Date(Math.max(start.getTime(), rangeStart.getTime()));
+  const clippedEnd = new Date(Math.min(end.getTime(), rangeEnd.getTime()));
+  if (clippedEnd.getTime() > clippedStart.getTime()) {
+    bands.push({ start: clippedStart, end: clippedEnd });
+  }
+}
+
 function solarEventUtcDate(year, month, day, dayOfYear, latitude, longitude, isSunrise) {
   const longitudeHour = longitude / 15;
   const approximateTime = dayOfYear + ((isSunrise ? 6 : 18) - longitudeHour) / 24;
@@ -1299,6 +1348,21 @@ function renderCharts(forecast) {
     state.thresholdEnabled
   );
   const groupedOverviewHarvestWindows = groupAdjacentRanges(overviewHarvestWindows, 86400000 * 1.1);
+  const solarCoordinates = solarCoordinatesForSelection();
+  const weekNightBands = buildNightBandsForRange(
+    forecast.weekRange.start,
+    forecast.weekRange.end,
+    state.profile.timezone,
+    solarCoordinates
+  );
+  const overviewNightBands = mobile
+    ? []
+    : buildNightBandsForRange(
+      forecast.overviewRange.start,
+      forecast.overviewRange.end,
+      state.profile.timezone,
+      solarCoordinates
+    );
 
   renderOverviewHarvestWindowSummary(groupedOverviewHarvestWindows);
 
@@ -1323,6 +1387,7 @@ function renderCharts(forecast) {
     timeGrid: "half-day",
     thresholdShadeMode: "harvest-windows",
     harvestWindows: weekHarvestWindows,
+    nightBands: weekNightBands,
     thresholdLabelPosition: "left-of-axis"
   });
 
@@ -1345,6 +1410,7 @@ function renderCharts(forecast) {
     tickLabelSize: mobile ? 9 : 10,
     thresholdShadeMode: "harvest-windows",
     harvestWindows: groupedOverviewHarvestWindows,
+    nightBands: overviewNightBands,
     harvestWindowLabel: mobile ? "" : formatChartHarvestWindowLabel,
     harvestWindowLabelMinWidth: 54,
     harvestWindowLabelPosition: "above-plot",
@@ -1422,9 +1488,9 @@ function buildHarvestDayRanges(startDate, endDate, profile, thresholdM, enabled)
   return ranges;
 }
 
-function zonedDateKeyToDate(dateKey, timeZone) {
+function zonedDateKeyToDate(dateKey, timeZone, hour = 0, minute = 0, second = 0) {
   const [year, month, day] = dateKey.split("-").map(Number);
-  const targetMs = Date.UTC(year, month - 1, day, 0, 0, 0);
+  const targetMs = Date.UTC(year, month - 1, day, hour, minute, second);
   let utcMs = targetMs;
 
   for (let i = 0; i < 4; i += 1) {
