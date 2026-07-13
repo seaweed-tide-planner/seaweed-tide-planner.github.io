@@ -1,11 +1,11 @@
-import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260712-night-bands-swahili";
-import { t, translateDataText } from "./language.js?v=20260712-night-bands-swahili";
+import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260713-night-only-shading";
+import { t, translateDataText } from "./language.js?v=20260713-night-only-shading";
 import {
   isOfflineStorageSupported,
   listFarmLocationOfflineBundles
 } from "./offline_store.js?v=20260611-pwa-foundation";
 
-const TIDE_PAGE_VERSION = "20260712-night-bands-swahili";
+const TIDE_PAGE_VERSION = "20260713-night-only-shading";
 
 const KENYA_COAST_VIEW = {
   center: [-4.45, 39.45],

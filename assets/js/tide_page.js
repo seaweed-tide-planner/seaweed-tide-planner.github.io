@@ -6,7 +6,7 @@ import {
   loadPublicFarmLocations,
   loadPublicTideDatasetBundle,
   loadPublicTideReferences
-} from "./tide_data.js?v=20260712-night-bands-swahili";
+} from "./tide_data.js?v=20260713-night-only-shading";
 import {
   getFarmLocationOfflineBundle,
   isOfflineStorageSupported,
@@ -41,13 +41,13 @@ import {
   startOfMonthKey,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260712-night-bands-swahili";
+import { renderTideChart } from "./tide_charts.js?v=20260713-night-only-shading";
 import {
   getLocale,
   t,
   translateDataText,
   translateStatusLabel
-} from "./language.js?v=20260712-night-bands-swahili";
+} from "./language.js?v=20260713-night-only-shading";
 
 const state = {
   location: null,
@@ -746,7 +746,7 @@ function locationSymbol(location) {
 }
 
 function mapUrl(location) {
-  return `./map.html?v=20260712-night-bands-swahili&location=${encodeURIComponent(location.key)}`;
+  return `./map.html?v=20260713-night-only-shading&location=${encodeURIComponent(location.key)}`;
 }
 
 function referenceStationLabel(profile) {
@@ -1387,7 +1387,10 @@ function renderCharts(forecast) {
     timeGrid: "half-day",
     thresholdShadeMode: "harvest-windows",
     harvestWindows: weekHarvestWindows,
+    harvestWindowTopColor: "transparent",
+    harvestWindowBottomColor: "rgba(22, 163, 74, 0.16)",
     nightBands: weekNightBands,
+    nightBandColor: "rgba(15, 23, 42, 0.055)",
     thresholdLabelPosition: "left-of-axis"
   });
 
@@ -1401,7 +1404,7 @@ function renderCharts(forecast) {
     now: forecast.now,
     compact: true,
     timeGrid: "month",
-    monthBanding: true,
+    monthBanding: false,
     topPadding: mobile ? 18 : 34,
     leftPadding: mobile ? 44 : 96,
     showExtremes: false,
@@ -1410,7 +1413,10 @@ function renderCharts(forecast) {
     tickLabelSize: mobile ? 9 : 10,
     thresholdShadeMode: "harvest-windows",
     harvestWindows: groupedOverviewHarvestWindows,
+    harvestWindowTopColor: "transparent",
+    harvestWindowBottomColor: "rgba(22, 163, 74, 0.14)",
     nightBands: overviewNightBands,
+    nightBandColor: "rgba(15, 23, 42, 0.035)",
     harvestWindowLabel: mobile ? "" : formatChartHarvestWindowLabel,
     harvestWindowLabelMinWidth: 54,
     harvestWindowLabelPosition: "above-plot",

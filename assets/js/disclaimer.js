@@ -1,4 +1,4 @@
-import { t } from "./language.js?v=20260712-night-bands-swahili";
+import { t } from "./language.js?v=20260713-night-only-shading";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
 

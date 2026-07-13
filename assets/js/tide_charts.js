@@ -7,7 +7,7 @@ import {
   localDateKey,
   startOfMonthKey
 } from "./tide_format.js";
-import { getLocale, t } from "./language.js?v=20260712-night-bands-swahili";
+import { getLocale, t } from "./language.js?v=20260713-night-only-shading";
 
 const COLORS = {
   line: "#3b82f6",
@@ -21,7 +21,7 @@ const COLORS = {
   thresholdFill: "rgba(22, 163, 74, 0.20)",
   thresholdSoftFill: "rgba(34, 197, 94, 0.08)",
   thresholdBorder: "rgba(22, 163, 74, 0.48)",
-  night: "rgba(15, 23, 42, 0.075)",
+  night: "rgba(15, 23, 42, 0.055)",
   now: "#ef4444"
 };
 
@@ -455,8 +455,11 @@ function drawHarvestWindowFills(ctx, windows, x, pad, plotW, plotH, thresholdY, 
     const right = Math.min(chartRight, x(getWindowTime(window.end)));
     if (right <= left) continue;
 
-    ctx.fillStyle = options.harvestWindowTopColor || COLORS.thresholdSoftFill;
-    ctx.fillRect(left, chartTop, right - left, Math.max(0, bandTop - chartTop));
+    const topColor = options.harvestWindowTopColor || COLORS.thresholdSoftFill;
+    if (topColor !== "transparent" && topColor !== "none") {
+      ctx.fillStyle = topColor;
+      ctx.fillRect(left, chartTop, right - left, Math.max(0, bandTop - chartTop));
+    }
 
     ctx.fillStyle = options.harvestWindowBottomColor || COLORS.thresholdFill;
     ctx.fillRect(left, bandTop, right - left, chartBottom - bandTop);
