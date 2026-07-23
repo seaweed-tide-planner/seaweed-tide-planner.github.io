@@ -1,4 +1,4 @@
-import { t } from "./language.js?v=20260723-calendar-daylight-harvest";
+import { t } from "./language.js?v=20260723-table-harvest-align";
 import "./site_feedback.js?v=1";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";

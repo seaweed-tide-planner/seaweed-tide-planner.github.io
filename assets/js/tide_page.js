@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js?v=20260723-calendar-daylight-harvest";
+import { APP_CONFIG } from "./config.js?v=20260723-table-harvest-align";
 import {
   getDataStatus,
   getLocations,
@@ -6,7 +6,7 @@ import {
   loadPublicFarmLocations,
   loadPublicTideDatasetBundle,
   loadPublicTideReferences
-} from "./tide_data.js?v=20260723-calendar-daylight-harvest";
+} from "./tide_data.js?v=20260723-table-harvest-align";
 import {
   getFarmLocationOfflineBundle,
   isOfflineStorageSupported,
@@ -40,13 +40,13 @@ import {
   startOfMonthKey,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260723-calendar-daylight-harvest";
+import { renderTideChart } from "./tide_charts.js?v=20260723-table-harvest-align";
 import {
   getLocale,
   t,
   translateDataText,
   translateStatusLabel
-} from "./language.js?v=20260723-calendar-daylight-harvest";
+} from "./language.js?v=20260723-table-harvest-align";
 
 const state = {
   location: null,
@@ -770,7 +770,7 @@ function locationSymbol(location) {
 }
 
 function mapUrl(location) {
-  return `./map.html?v=20260723-calendar-daylight-harvest&location=${encodeURIComponent(location.key)}`;
+  return `./map.html?v=20260723-table-harvest-align&location=${encodeURIComponent(location.key)}`;
 }
 
 function referenceStationLabel(profile) {
@@ -1577,16 +1577,6 @@ function renderLowTides() {
   const dailyLows = dailyRows.map((row) => row.lowestLow).filter(Boolean);
   const moonByDay = moonMapByLocalDay(forecast.moons);
   const springLowDays = springLowDaySet(dailyLows, forecast.springs);
-  const tableHarvestWindows = groupAdjacentRanges(
-    buildHarvestDayRanges(
-      forecast.now,
-      new Date(endMs),
-      state.profile,
-      state.thresholdM,
-      state.thresholdEnabled
-    ),
-    86400000 * 1.1
-  );
 
   els.lowTideRangeLabel.textContent = t("table.nextDays", { days: state.lowListDays });
   if (els.loadMoreLows) {
@@ -1598,8 +1588,18 @@ function renderLowTides() {
     return;
   }
 
-  els.lowTideList.innerHTML = dailyRows.map((row) => {
-    const isHarvest = row.lows.some(isHarvestEligibleLow);
+  const rowsWithEligibility = dailyRows.map((row) => ({
+    ...row,
+    eligibleLowKeys: harvestEligibleLowKeySet(row)
+  }));
+  const tableHarvestWindows = buildHarvestWindowsFromDateKeys(
+    rowsWithEligibility
+      .filter((row) => row.eligibleLowKeys.size > 0)
+      .map((row) => row.dateKey)
+  );
+
+  els.lowTideList.innerHTML = rowsWithEligibility.map((row) => {
+    const isHarvest = row.eligibleLowKeys.size > 0;
     const isSpringLow = isHarvest && springLowDays.has(row.dateKey);
     const moon = moonByDay.get(row.dateKey);
     const windowInfo = harvestWindowInfoForDate(row.dateKey, tableHarvestWindows);
@@ -1611,8 +1611,8 @@ function renderLowTides() {
         <td>${escapeHtml(formatDate(row.date, state.profile.timezone, getLocale()))}</td>
         <td class="high-tide-cell">${formatTidePeriodCell(row.highMorning, "high")}</td>
         <td class="high-tide-cell">${formatTidePeriodCell(row.highAfternoon, "high")}</td>
-        <td class="low-tide-cell">${formatTidePeriodCell(row.lowMorning, "low")}</td>
-        <td class="low-tide-cell">${formatTidePeriodCell(row.lowAfternoon, "low")}</td>
+        <td class="low-tide-cell">${formatTidePeriodCell(row.lowMorning, "low", row.eligibleLowKeys)}</td>
+        <td class="low-tide-cell">${formatTidePeriodCell(row.lowAfternoon, "low", row.eligibleLowKeys)}</td>
         <td>${status}</td>
       </tr>
     `;
@@ -1688,21 +1688,36 @@ function isHarvestEligibleLow(extreme, thresholdM = state.thresholdM, enabled = 
   return isBelowHarvestThreshold(extreme, thresholdM, enabled) && isDaylightTideEvent(extreme);
 }
 
-function formatTidePeriodCell(extremes, tideType) {
-  if (!extremes?.length) return `<span class="muted-cell">--</span>`;
-  return extremes.map((extreme) => formatTideTableCell(extreme, tideType)).join("<br>");
+function harvestEligibleLowKeySet(row) {
+  return new Set(
+    row.lows
+      .filter((low) => isHarvestEligibleLow(low))
+      .map(tideEventKey)
+  );
 }
 
-function formatTideTableCell(extreme, tideType) {
+function tideEventKey(extreme) {
+  return `${extreme?.type || ""}:${Math.round(extreme?.timeMs || 0)}:${Number(extreme?.heightM || 0).toFixed(3)}`;
+}
+
+function formatTidePeriodCell(extremes, tideType, eligibleLowKeys = null) {
+  if (!extremes?.length) return `<span class="muted-cell">--</span>`;
+  return extremes.map((extreme) => formatTideTableCell(extreme, tideType, eligibleLowKeys)).join("<br>");
+}
+
+function formatTideTableCell(extreme, tideType, eligibleLowKeys = null) {
   if (!extreme) return `<span class="muted-cell">--</span>`;
 
   const classes = ["tide-event-cell"];
   if (tideType === "high") classes.push("high-tide-event");
   if (tideType === "low") {
     const isBelowThreshold = isBelowHarvestThreshold(extreme);
+    const isEligibleLow = eligibleLowKeys
+      ? eligibleLowKeys.has(tideEventKey(extreme))
+      : isHarvestEligibleLow(extreme);
     classes.push("low-tide-event");
     if (isBelowThreshold) classes.push("low-tide-threshold");
-    if (isHarvestEligibleLow(extreme)) {
+    if (isEligibleLow) {
       classes.push("low-tide-daylight");
     } else if (isBelowThreshold) {
       classes.push("low-tide-night");
@@ -1747,8 +1762,8 @@ function springLowDaySet(dailyLows, windows) {
 
 function harvestWindowInfoForDate(dateKey, windows) {
   for (const window of windows) {
-    const startKey = localDateKey(window.start, state.profile.timezone);
-    const endKey = localDateKey(window.end, state.profile.timezone);
+    const startKey = window.startKey || localDateKey(window.start, state.profile.timezone);
+    const endKey = window.endKey || localDateKey(window.end, state.profile.timezone);
     if (dateKey < startKey || dateKey > endKey) continue;
 
     const sameDay = startKey === endKey;
@@ -1760,6 +1775,29 @@ function harvestWindowInfoForDate(dateKey, windows) {
   }
 
   return null;
+}
+
+function buildHarvestWindowsFromDateKeys(dateKeys) {
+  const sortedKeys = [...new Set(dateKeys)].sort();
+  const windows = [];
+
+  for (const dateKey of sortedKeys) {
+    const previous = windows[windows.length - 1];
+    if (previous && addDaysToDateKey(previous.endKey, 1) === dateKey) {
+      previous.endKey = dateKey;
+      previous.end = new Date(zonedDateKeyToDate(addDaysToDateKey(dateKey, 1), state.profile.timezone).getTime() - 60000);
+      continue;
+    }
+
+    windows.push({
+      startKey: dateKey,
+      endKey: dateKey,
+      start: zonedDateKeyToDate(dateKey, state.profile.timezone),
+      end: new Date(zonedDateKeyToDate(addDaysToDateKey(dateKey, 1), state.profile.timezone).getTime() - 60000)
+    });
+  }
+
+  return windows;
 }
 
 function renderLowTideStatus(isHarvest, isSpringLow, moon, windowInfo) {

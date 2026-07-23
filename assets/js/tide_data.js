@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js?v=20260723-calendar-daylight-harvest";
+import { APP_CONFIG } from "./config.js?v=20260723-table-harvest-align";
 import { TIDE_LOCATIONS } from "../data/locations.js";
 import { TIDE_PROFILES } from "../data/tide_profiles.js";
 

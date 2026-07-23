@@ -1,11 +1,11 @@
-import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260723-calendar-daylight-harvest";
-import { t, translateDataText } from "./language.js?v=20260723-calendar-daylight-harvest";
+import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260723-table-harvest-align";
+import { t, translateDataText } from "./language.js?v=20260723-table-harvest-align";
 import {
   isOfflineStorageSupported,
   listFarmLocationOfflineBundles
 } from "./offline_store.js?v=20260611-pwa-foundation";
 
-const TIDE_PAGE_VERSION = "20260723-calendar-daylight-harvest";
+const TIDE_PAGE_VERSION = "20260723-table-harvest-align";
 
 const KENYA_COAST_VIEW = {
   center: [-4.45, 39.45],

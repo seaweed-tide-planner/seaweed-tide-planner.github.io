@@ -1,5 +1,5 @@
-import { APP_CONFIG } from "./config.js?v=20260723-calendar-daylight-harvest";
-import { getLocale, t } from "./language.js?v=20260723-calendar-daylight-harvest";
+import { APP_CONFIG } from "./config.js?v=20260723-table-harvest-align";
+import { getLocale, t } from "./language.js?v=20260723-table-harvest-align";
 
 const SOURCE_KEY = "kmd_cap";
 const KMD_WARNINGS_URL = "https://meteo.go.ke/weather-warnings/";
