@@ -1306,6 +1306,11 @@ main.importer-shell + .marine-disclaimer-footer {
   font-weight: 700;
 }
 
+.calendar-day.harvest.past {
+  background: rgba(100, 116, 139, 0.14);
+  color: #64748b;
+}
+
 .calendar-day.today {
   border: 2px solid #0ea5e9;
   color: var(--text);

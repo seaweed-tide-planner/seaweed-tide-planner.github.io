@@ -1,11 +1,11 @@
-import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260723-threshold-tide-styling";
-import { t, translateDataText } from "./language.js?v=20260723-threshold-tide-styling";
+import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260723-past-harvest-calendar";
+import { t, translateDataText } from "./language.js?v=20260723-past-harvest-calendar";
 import {
   isOfflineStorageSupported,
   listFarmLocationOfflineBundles
 } from "./offline_store.js?v=20260611-pwa-foundation";
 
-const TIDE_PAGE_VERSION = "20260723-threshold-tide-styling";
+const TIDE_PAGE_VERSION = "20260723-past-harvest-calendar";
 
 const KENYA_COAST_VIEW = {
   center: [-4.45, 39.45],

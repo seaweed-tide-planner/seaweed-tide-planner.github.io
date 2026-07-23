@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js?v=20260723-threshold-tide-styling";
+import { APP_CONFIG } from "./config.js?v=20260723-past-harvest-calendar";
 import {
   getDataStatus,
   getLocations,
@@ -6,7 +6,7 @@ import {
   loadPublicFarmLocations,
   loadPublicTideDatasetBundle,
   loadPublicTideReferences
-} from "./tide_data.js?v=20260723-threshold-tide-styling";
+} from "./tide_data.js?v=20260723-past-harvest-calendar";
 import {
   getFarmLocationOfflineBundle,
   isOfflineStorageSupported,
@@ -40,13 +40,13 @@ import {
   startOfMonthKey,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260723-threshold-tide-styling";
+import { renderTideChart } from "./tide_charts.js?v=20260723-past-harvest-calendar";
 import {
   getLocale,
   t,
   translateDataText,
   translateStatusLabel
-} from "./language.js?v=20260723-threshold-tide-styling";
+} from "./language.js?v=20260723-past-harvest-calendar";
 
 const state = {
   location: null,
@@ -770,7 +770,7 @@ function locationSymbol(location) {
 }
 
 function mapUrl(location) {
-  return `./map.html?v=20260723-threshold-tide-styling&location=${encodeURIComponent(location.key)}`;
+  return `./map.html?v=20260723-past-harvest-calendar&location=${encodeURIComponent(location.key)}`;
 }
 
 function referenceStationLabel(profile) {
@@ -1803,8 +1803,12 @@ function moonSymbol(type) {
 
 function renderCalendar(forecast) {
   const todayKey = localDateKey(forecast.now, state.profile.timezone);
-  const harvestDays = buildHarvestDays(forecast.fullExtremes, forecast.moons);
   const months = [0, 1, 2].map((offset) => startOfMonthKey(addMonthsToDateKey(todayKey, offset)));
+  const calendarRange = visibleCalendarRange(months);
+  const calendarCurve = tideCurveForRange(calendarRange, 30);
+  const calendarExtremes = tideExtremesForRange(calendarRange, calendarCurve);
+  const calendarMoons = moonEvents(calendarRange.start, calendarRange.end);
+  const harvestDays = buildHarvestDays(calendarExtremes, calendarMoons);
 
   els.harvestCalendar.innerHTML = months.map((monthStartKey) => {
     const monthDate = dateKeyToUtcDate(monthStartKey);
@@ -1849,6 +1853,15 @@ function renderCalendar(forecast) {
       </section>
     `;
   }).join("");
+}
+
+function visibleCalendarRange(months) {
+  const firstMonthKey = months[0];
+  const lastMonthKey = months[months.length - 1];
+  const lastDayKey = `${lastMonthKey.slice(0, 8)}${String(daysInMonth(lastMonthKey)).padStart(2, "0")}`;
+  const start = zonedDateKeyToDate(firstMonthKey, state.profile.timezone);
+  const end = new Date(zonedDateKeyToDate(addDaysToDateKey(lastDayKey, 1), state.profile.timezone).getTime() - 60000);
+  return { start, end };
 }
 
 function buildHarvestDays(extremes, moons) {

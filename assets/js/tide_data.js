@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js?v=20260723-threshold-tide-styling";
+import { APP_CONFIG } from "./config.js?v=20260723-past-harvest-calendar";
 import { TIDE_LOCATIONS } from "../data/locations.js";
 import { TIDE_PROFILES } from "../data/tide_profiles.js";
 

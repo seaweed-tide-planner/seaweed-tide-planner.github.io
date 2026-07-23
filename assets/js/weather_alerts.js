@@ -1,5 +1,5 @@
-import { APP_CONFIG } from "./config.js?v=20260723-threshold-tide-styling";
-import { getLocale, t } from "./language.js?v=20260723-threshold-tide-styling";
+import { APP_CONFIG } from "./config.js?v=20260723-past-harvest-calendar";
+import { getLocale, t } from "./language.js?v=20260723-past-harvest-calendar";
 
 const SOURCE_KEY = "kmd_cap";
 const KMD_WARNINGS_URL = "https://meteo.go.ke/weather-warnings/";

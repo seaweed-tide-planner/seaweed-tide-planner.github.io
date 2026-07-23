@@ -1,4 +1,4 @@
-import { t } from "./language.js?v=20260723-threshold-tide-styling";
+import { t } from "./language.js?v=20260723-past-harvest-calendar";
 import "./site_feedback.js?v=1";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
