@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js?v=20260723-sunrise-grace-low-tides";
+import { APP_CONFIG } from "./config.js?v=20260723-threshold-tide-styling";
 import {
   getDataStatus,
   getLocations,
@@ -6,7 +6,7 @@ import {
   loadPublicFarmLocations,
   loadPublicTideDatasetBundle,
   loadPublicTideReferences
-} from "./tide_data.js?v=20260723-sunrise-grace-low-tides";
+} from "./tide_data.js?v=20260723-threshold-tide-styling";
 import {
   getFarmLocationOfflineBundle,
   isOfflineStorageSupported,
@@ -14,7 +14,6 @@ import {
   saveFarmLocationOfflineBundle
 } from "./offline_store.js?v=20260611-pwa-foundation";
 import {
-  findNextHarvestLow,
   moonEvents,
   moonIllumination,
   moonPhase,
@@ -41,13 +40,13 @@ import {
   startOfMonthKey,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260723-sunrise-grace-low-tides";
+import { renderTideChart } from "./tide_charts.js?v=20260723-threshold-tide-styling";
 import {
   getLocale,
   t,
   translateDataText,
   translateStatusLabel
-} from "./language.js?v=20260723-sunrise-grace-low-tides";
+} from "./language.js?v=20260723-threshold-tide-styling";
 
 const state = {
   location: null,
@@ -771,7 +770,7 @@ function locationSymbol(location) {
 }
 
 function mapUrl(location) {
-  return `./map.html?v=20260723-sunrise-grace-low-tides&location=${encodeURIComponent(location.key)}`;
+  return `./map.html?v=20260723-threshold-tide-styling&location=${encodeURIComponent(location.key)}`;
 }
 
 function referenceStationLabel(profile) {
@@ -793,12 +792,7 @@ function activeDatasetName() {
 }
 
 function renderSummaryCards(forecast) {
-  const nextHarvest = findNextHarvestLow(
-    forecast.fullExtremes,
-    forecast.now,
-    state.thresholdM,
-    state.thresholdEnabled
-  );
+  const nextHarvest = findNextHarvestEligibleLow(forecast.fullExtremes, forecast.now);
 
   renderTodayTides(forecast);
 
@@ -1099,7 +1093,7 @@ function renderHarvestSummary(nextHarvest, forecast) {
 
   const startLow = lowestLowForLocalDay(harvestWindow.start);
   const endLow = lowestLowForLocalDay(harvestWindow.end);
-  const lowestLow = lowestLowBetween(harvestWindow.start, harvestWindow.end);
+  const lowestLow = lowestEligibleLowBetween(harvestWindow.start, harvestWindow.end);
 
   els.harvestWindow.textContent =
     `${formatDate(harvestWindow.start, state.profile.timezone, getLocale())} - ${formatDate(harvestWindow.end, state.profile.timezone, getLocale())}`;
@@ -1119,6 +1113,15 @@ function resetHarvestSummary(message) {
   els.harvestLowestLow.textContent = "--";
   els.harvestEndLabel.textContent = t("summary.lowTide");
   els.harvestEndLow.textContent = "--";
+}
+
+function findNextHarvestEligibleLow(extremes, now) {
+  if (!state.thresholdEnabled) return null;
+
+  const nowMs = now.getTime();
+  return extremes.find((extreme) => {
+    return extreme.timeMs >= nowMs && isHarvestEligibleLow(extreme);
+  }) || null;
 }
 
 function nextHarvestWindow(forecast, nextHarvest) {
@@ -1162,13 +1165,13 @@ function localDayRange(dateKey, timeZone) {
 
 function lowestLowForLocalDay(date) {
   const dayRange = localDayRange(localDateKey(date, state.profile.timezone), state.profile.timezone);
-  return lowestLowBetween(dayRange.start, dayRange.end);
+  return lowestEligibleLowBetween(dayRange.start, dayRange.end);
 }
 
-function lowestLowBetween(startDate, endDate) {
+function lowestEligibleLowBetween(startDate, endDate) {
   const range = { start: startDate, end: endDate };
   const curve = tideCurveForRange(range, 10);
-  const lows = tideExtremesForRange(range, curve).filter((extreme) => extreme.type === "low");
+  const lows = tideExtremesForRange(range, curve).filter((low) => isHarvestEligibleLow(low));
   if (!lows.length) return null;
   return lows.reduce((lowest, low) => (low.heightM < lowest.heightM ? low : lowest), lows[0]);
 }
@@ -1507,9 +1510,9 @@ function buildHarvestDayRanges(startDate, endDate, profile, thresholdM, enabled)
     const dayRange = { start: dayStart, end: dayEnd };
     const curve = tideCurveForRange(dayRange, 30);
     const lows = tideExtremesForRange(dayRange, curve).filter((extreme) => extreme.type === "low");
-    const lowest = lows.reduce((min, low) => Math.min(min, low.heightM), Infinity);
+    const eligibleLows = lows.filter((low) => isHarvestEligibleLow(low, thresholdM, enabled));
 
-    if (lowest <= thresholdM) {
+    if (eligibleLows.length) {
       ranges.push({ start: dayStart, end: dayEnd });
     }
 
@@ -1592,7 +1595,7 @@ function renderLowTides() {
   }
 
   els.lowTideList.innerHTML = dailyRows.map((row) => {
-    const isHarvest = state.thresholdEnabled && row.lows.some((low) => low.heightM <= state.thresholdM);
+    const isHarvest = row.lows.some(isHarvestEligibleLow);
     const isSpringLow = isHarvest && springLowDays.has(row.dateKey);
     const moon = moonByDay.get(row.dateKey);
     const windowInfo = harvestWindowInfoForDate(row.dateKey, tableHarvestWindows);
@@ -1668,6 +1671,19 @@ function isDaylightTideEvent(extreme) {
   return extreme.date >= sunriseGraceStart && extreme.date <= sunset;
 }
 
+function isBelowHarvestThreshold(extreme, thresholdM = state.thresholdM, enabled = state.thresholdEnabled) {
+  return Boolean(
+    enabled &&
+    extreme?.type === "low" &&
+    Number.isFinite(extreme.heightM) &&
+    extreme.heightM <= thresholdM
+  );
+}
+
+function isHarvestEligibleLow(extreme, thresholdM = state.thresholdM, enabled = state.thresholdEnabled) {
+  return isBelowHarvestThreshold(extreme, thresholdM, enabled) && isDaylightTideEvent(extreme);
+}
+
 function formatTidePeriodCell(extremes, tideType) {
   if (!extremes?.length) return `<span class="muted-cell">--</span>`;
   return extremes.map((extreme) => formatTideTableCell(extreme, tideType)).join("<br>");
@@ -1679,7 +1695,14 @@ function formatTideTableCell(extreme, tideType) {
   const classes = ["tide-event-cell"];
   if (tideType === "high") classes.push("high-tide-event");
   if (tideType === "low") {
-    classes.push("low-tide-event", isDaylightTideEvent(extreme) ? "low-tide-daylight" : "low-tide-night");
+    const isBelowThreshold = isBelowHarvestThreshold(extreme);
+    classes.push("low-tide-event");
+    if (isBelowThreshold) classes.push("low-tide-threshold");
+    if (isHarvestEligibleLow(extreme)) {
+      classes.push("low-tide-daylight");
+    } else if (isBelowThreshold) {
+      classes.push("low-tide-night");
+    }
   }
 
   return `<span class="${classes.join(" ")}"><span class="tide-event-time">${escapeHtml(formatTime(extreme.date, state.profile.timezone, getLocale()))}</span> <span class="tide-event-height">(${escapeHtml(formatCompactMetres(extreme.heightM))})</span></span>`;
@@ -1836,8 +1859,10 @@ function buildHarvestDays(extremes, moons) {
       const dateKey = localDateKey(low.date, state.profile.timezone);
       const current = dayMap.get(dateKey) || { lows: [], harvest: false, minLow: Infinity, moonLabel: "" };
       current.lows.push(low);
-      current.minLow = Math.min(current.minLow, low.heightM);
-      current.harvest = current.harvest || low.heightM <= state.thresholdM;
+      if (isHarvestEligibleLow(low)) {
+        current.minLow = Math.min(current.minLow, low.heightM);
+        current.harvest = true;
+      }
       dayMap.set(dateKey, current);
     }
   }

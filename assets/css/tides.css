@@ -1051,6 +1051,10 @@ textarea {
 
 .low-tide-table .low-tide-cell .low-tide-event {
   color: var(--text-main);
+  font-weight: 400;
+}
+
+.low-tide-table .low-tide-cell .low-tide-threshold {
   font-weight: 700;
 }
 

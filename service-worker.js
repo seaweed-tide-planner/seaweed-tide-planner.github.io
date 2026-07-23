@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260723-site-feedback";
+const CACHE_VERSION = "20260723-threshold-tide-styling";
 const SHELL_CACHE = `seaweed-tide-planner-shell-${CACHE_VERSION}`;
 const DATA_CACHE = "seaweed-tide-planner-data-v2";
 const MAP_TILE_CACHE = "seaweed-tide-planner-map-tiles-v1";

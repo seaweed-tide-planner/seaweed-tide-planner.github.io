@@ -1,11 +1,11 @@
-import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260723-sunrise-grace-low-tides";
-import { t, translateDataText } from "./language.js?v=20260723-sunrise-grace-low-tides";
+import { loadPublicFarmLocations, loadPublicTideReferences } from "./tide_data.js?v=20260723-threshold-tide-styling";
+import { t, translateDataText } from "./language.js?v=20260723-threshold-tide-styling";
 import {
   isOfflineStorageSupported,
   listFarmLocationOfflineBundles
 } from "./offline_store.js?v=20260611-pwa-foundation";
 
-const TIDE_PAGE_VERSION = "20260723-sunrise-grace-low-tides";
+const TIDE_PAGE_VERSION = "20260723-threshold-tide-styling";
 
 const KENYA_COAST_VIEW = {
   center: [-4.45, 39.45],
