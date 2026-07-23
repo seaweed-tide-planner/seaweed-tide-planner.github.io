@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260723-sunrise-grace-low-tides";
+const CACHE_VERSION = "20260723-site-feedback";
 const SHELL_CACHE = `seaweed-tide-planner-shell-${CACHE_VERSION}`;
 const DATA_CACHE = "seaweed-tide-planner-data-v2";
 const MAP_TILE_CACHE = "seaweed-tide-planner-map-tiles-v1";
@@ -37,6 +37,7 @@ const SHELL_ASSETS = [
   "./assets/js/observation_form.js",
   "./assets/js/offline_store.js",
   "./assets/js/pwa.js",
+  "./assets/js/site_feedback.js",
   "./assets/js/tide_charts.js",
   "./assets/js/tide_core.js",
   "./assets/js/tide_data.js",

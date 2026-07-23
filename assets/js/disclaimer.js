@@ -1,4 +1,5 @@
 import { t } from "./language.js?v=20260723-sunrise-grace-low-tides";
+import "./site_feedback.js?v=1";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
 
