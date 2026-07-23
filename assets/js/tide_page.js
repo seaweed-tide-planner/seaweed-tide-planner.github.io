@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js?v=20260723-past-harvest-calendar";
+import { APP_CONFIG } from "./config.js?v=20260723-calendar-daylight-harvest";
 import {
   getDataStatus,
   getLocations,
@@ -6,7 +6,7 @@ import {
   loadPublicFarmLocations,
   loadPublicTideDatasetBundle,
   loadPublicTideReferences
-} from "./tide_data.js?v=20260723-past-harvest-calendar";
+} from "./tide_data.js?v=20260723-calendar-daylight-harvest";
 import {
   getFarmLocationOfflineBundle,
   isOfflineStorageSupported,
@@ -40,13 +40,13 @@ import {
   startOfMonthKey,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260723-past-harvest-calendar";
+import { renderTideChart } from "./tide_charts.js?v=20260723-calendar-daylight-harvest";
 import {
   getLocale,
   t,
   translateDataText,
   translateStatusLabel
-} from "./language.js?v=20260723-past-harvest-calendar";
+} from "./language.js?v=20260723-calendar-daylight-harvest";
 
 const state = {
   location: null,
@@ -770,7 +770,7 @@ function locationSymbol(location) {
 }
 
 function mapUrl(location) {
-  return `./map.html?v=20260723-past-harvest-calendar&location=${encodeURIComponent(location.key)}`;
+  return `./map.html?v=20260723-calendar-daylight-harvest&location=${encodeURIComponent(location.key)}`;
 }
 
 function referenceStationLabel(profile) {
@@ -1334,9 +1334,13 @@ function solarEventUtcDate(year, month, day, dayOfYear, latitude, longitude, isS
     ? 360 - radToDeg(Math.acos(cosHourAngle))
     : radToDeg(Math.acos(cosHourAngle))) / 15;
   const localMeanTime = hourAngle + rightAscension - (0.06571 * approximateTime) - 6.622;
-  const utcHours = localMeanTime - longitudeHour;
+  const utcHours = normalizeDayHours(localMeanTime - longitudeHour);
 
   return new Date(Date.UTC(year, month - 1, day) + Math.round(utcHours * 3600000));
+}
+
+function normalizeDayHours(hours) {
+  return ((hours % 24) + 24) % 24;
 }
 
 function degToRad(degrees) {
@@ -1805,10 +1809,8 @@ function renderCalendar(forecast) {
   const todayKey = localDateKey(forecast.now, state.profile.timezone);
   const months = [0, 1, 2].map((offset) => startOfMonthKey(addMonthsToDateKey(todayKey, offset)));
   const calendarRange = visibleCalendarRange(months);
-  const calendarCurve = tideCurveForRange(calendarRange, 30);
-  const calendarExtremes = tideExtremesForRange(calendarRange, calendarCurve);
   const calendarMoons = moonEvents(calendarRange.start, calendarRange.end);
-  const harvestDays = buildHarvestDays(calendarExtremes, calendarMoons);
+  const harvestDays = buildCalendarHarvestDays(months, calendarMoons);
 
   els.harvestCalendar.innerHTML = months.map((monthStartKey) => {
     const monthDate = dateKeyToUtcDate(monthStartKey);
@@ -1864,31 +1866,49 @@ function visibleCalendarRange(months) {
   return { start, end };
 }
 
-function buildHarvestDays(extremes, moons) {
+function buildCalendarHarvestDays(months, moons) {
   const dayMap = new Map();
 
   if (state.thresholdEnabled) {
-    for (const low of extremes.filter((extreme) => extreme.type === "low")) {
-      const dateKey = localDateKey(low.date, state.profile.timezone);
-      const current = dayMap.get(dateKey) || { lows: [], harvest: false, minLow: Infinity, moonLabel: "" };
-      current.lows.push(low);
-      if (isHarvestEligibleLow(low)) {
-        current.minLow = Math.min(current.minLow, low.heightM);
-        current.harvest = true;
+    for (const monthStartKey of months) {
+      const totalDays = daysInMonth(monthStartKey);
+
+      for (let day = 1; day <= totalDays; day += 1) {
+        const dateKey = `${monthStartKey.slice(0, 8)}${String(day).padStart(2, "0")}`;
+        const dayRange = localDayRange(dateKey, state.profile.timezone);
+        const dayCurve = tideCurveForRange(dayRange, 30);
+        const lows = tideExtremesForRange(dayRange, dayCurve).filter((extreme) => extreme.type === "low");
+
+        if (!lows.length) continue;
+
+        const current = dayMap.get(dateKey) || emptyCalendarDayInfo();
+        current.lows.push(...lows);
+
+        for (const low of lows) {
+          if (isHarvestEligibleLow(low)) {
+            current.minLow = Math.min(current.minLow, low.heightM);
+            current.harvest = true;
+          }
+        }
+
+        dayMap.set(dateKey, current);
       }
-      dayMap.set(dateKey, current);
     }
   }
 
   for (const moon of moons) {
     const dateKey = localDateKey(moon.date, state.profile.timezone);
-    const current = dayMap.get(dateKey) || { lows: [], harvest: false, minLow: Infinity, moonType: "" };
+    const current = dayMap.get(dateKey) || emptyCalendarDayInfo();
     current.moonLabel = moon.type === "full" ? t("moon.full") : t("moon.new");
     current.moonType = moon.type;
     dayMap.set(dateKey, current);
   }
 
   return dayMap;
+}
+
+function emptyCalendarDayInfo() {
+  return { lows: [], harvest: false, minLow: Infinity, moonLabel: "", moonType: "" };
 }
 
 function buildCalendarTitle(dateKey, info) {

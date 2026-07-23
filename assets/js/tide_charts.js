@@ -7,7 +7,7 @@ import {
   localDateKey,
   startOfMonthKey
 } from "./tide_format.js";
-import { getLocale, t } from "./language.js?v=20260723-past-harvest-calendar";
+import { getLocale, t } from "./language.js?v=20260723-calendar-daylight-harvest";
 
 const COLORS = {
   line: "#3b82f6",
