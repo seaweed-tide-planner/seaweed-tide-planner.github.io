@@ -1,5 +1,10 @@
 # Seaweed Tide Planner
 
+> [!IMPORTANT]
+> **Canonical repository:** `bosunjm-cloud/Seaweed_Tide_App`
+>
+> This repository is the sole source of truth for Tide Planner development, tide data, documentation, testing, Android packaging, and future deployment. Do not make further changes in the legacy `bosunjm-cloud/seaweed-tide-planner` repository.
+
 Standalone mobile-first tide planning web app for seaweed farming workflows in Kenya.
 
 The first build is a static GitHub Pages-compatible web app. It is intentionally separate from the Seaweed Station dashboard and does not use the Seaweed Station v4 Supabase database.

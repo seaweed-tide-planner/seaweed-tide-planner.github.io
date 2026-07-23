@@ -1,5 +1,5 @@
-import { APP_CONFIG } from "./config.js?v=20260612-location-identifiers";
-import { getLocale, t } from "./language.js?v=20260713-night-only-shading";
+import { APP_CONFIG } from "./config.js?v=20260723-daylight-tide-table";
+import { getLocale, t } from "./language.js?v=20260723-daylight-tide-table";
 
 const SOURCE_KEY = "kmd_cap";
 const KMD_WARNINGS_URL = "https://meteo.go.ke/weather-warnings/";
@@ -36,24 +36,28 @@ function getElements() {
 
 async function refreshWeatherAlertStatus() {
   try {
-    const liveStatus = await loadLiveStatusFromEdgeFunction();
-    renderWeatherAlert(liveStatus);
-    return;
-  } catch (edgeError) {
-    console.warn("KMD weather alert refresh failed, falling back to stored status.", edgeError);
-  }
-
-  try {
     const storedStatus = await loadStoredStatusFromSupabase();
     renderWeatherAlert(storedStatus);
+    return;
   } catch (storedError) {
     console.warn("Stored KMD weather alert status could not be read.", storedError);
-    renderWeatherAlert({
-      status: "error",
-      source_url: KMD_WARNINGS_URL,
-      error_message: storedError.message || "Weather alert status unavailable."
-    });
   }
+
+  if (APP_CONFIG.weatherAlerts?.edgeRefreshEnabled) {
+    try {
+      const liveStatus = await loadLiveStatusFromEdgeFunction();
+      renderWeatherAlert(liveStatus);
+      return;
+    } catch (edgeError) {
+      console.warn("KMD weather alert refresh failed.", edgeError);
+    }
+  }
+
+  renderWeatherAlert({
+    status: "error",
+    source_url: KMD_WARNINGS_URL,
+    error_message: "Weather alert status unavailable."
+  });
 }
 
 async function loadLiveStatusFromEdgeFunction() {

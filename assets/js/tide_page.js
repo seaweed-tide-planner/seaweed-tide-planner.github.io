@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js?v=20260612-location-identifiers";
+import { APP_CONFIG } from "./config.js?v=20260723-daylight-tide-table";
 import {
   getDataStatus,
   getLocations,
@@ -6,7 +6,7 @@ import {
   loadPublicFarmLocations,
   loadPublicTideDatasetBundle,
   loadPublicTideReferences
-} from "./tide_data.js?v=20260713-night-only-shading";
+} from "./tide_data.js?v=20260723-daylight-tide-table";
 import {
   getFarmLocationOfflineBundle,
   isOfflineStorageSupported,
@@ -41,13 +41,13 @@ import {
   startOfMonthKey,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260713-night-only-shading";
+import { renderTideChart } from "./tide_charts.js?v=20260723-daylight-tide-table";
 import {
   getLocale,
   t,
   translateDataText,
   translateStatusLabel
-} from "./language.js?v=20260713-night-only-shading";
+} from "./language.js?v=20260723-daylight-tide-table";
 
 const state = {
   location: null,
@@ -135,11 +135,11 @@ document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
   cacheElements();
-  await loadLocationRecords();
   populateLocationSelect();
   applyResponsiveDefaults();
   bindEvents();
   setLocation(resolveInitialLocationKey(), { updateUrl: false });
+  void refreshLocationRecordsInPlace();
   window.setInterval(renderClock, 30000);
   window.setInterval(refreshForecastIfNeeded, 60000);
 }
@@ -219,6 +219,28 @@ async function loadLocationRecords() {
     : [];
 
   tideLocations = visibleLocations();
+}
+
+async function refreshLocationRecordsInPlace() {
+  const selectedKey = state.location?.key || resolveInitialLocationKey();
+  try {
+    await loadLocationRecords();
+    populateLocationSelect();
+
+    const refreshedLocation = getLocation(selectedKey)
+      || getLocation(APP_CONFIG.defaultLocationKey)
+      || tideLocations[0];
+    if (!refreshedLocation) return;
+    state.location = refreshedLocation;
+    state.profile = TIDE_PROFILES[refreshedLocation.tideProfileKey]
+      || TIDE_PROFILES.kenya_mombasa_reference;
+    loadThresholdState();
+    syncThresholdControls();
+    els.locationSelect.value = refreshedLocation.key;
+    render();
+  } catch (error) {
+    console.warn("Location metadata refresh failed; keeping bundled locations.", error);
+  }
 }
 
 function visibleLocations() {
@@ -471,6 +493,7 @@ async function loadRuntimeTideData() {
   const sequence = ++tideDataLoadSequence;
   const locationKey = state.location.key;
   const datasetRef = state.location.defaultTideDatasetId || state.location.defaultTideDatasetKey || state.location.tideProfileKey;
+  const datasetKey = state.location.defaultTideDatasetKey || state.location.tideProfileKey;
   const now = new Date();
   const fromDate = addDaysToDateKey(localDateKey(now, state.profile.timezone), -2);
   const toDate = addDaysToDateKey(localDateKey(now, state.profile.timezone), 110);
@@ -487,7 +510,8 @@ async function loadRuntimeTideData() {
       fromDate,
       toDate
     });
-    if (sequence !== tideDataLoadSequence || state.location?.key !== locationKey) return;
+    const currentDatasetKey = state.location?.defaultTideDatasetKey || state.location?.tideProfileKey;
+    if (sequence !== tideDataLoadSequence || currentDatasetKey !== datasetKey) return;
 
     const tideData = normalizeTideDataBundle(bundle, "supabase");
     if (tideData.hasData) {
@@ -498,10 +522,10 @@ async function loadRuntimeTideData() {
       return;
     }
 
-    await loadRuntimeTideDataFromOffline(locationKey, sequence);
+    await loadRuntimeTideDataFromOffline(state.location?.key || locationKey, sequence);
   } catch (error) {
     console.warn("Runtime tide data load failed.", error);
-    await loadRuntimeTideDataFromOffline(locationKey, sequence);
+    await loadRuntimeTideDataFromOffline(state.location?.key || locationKey, sequence);
   }
 }
 
@@ -746,7 +770,7 @@ function locationSymbol(location) {
 }
 
 function mapUrl(location) {
-  return `./map.html?v=20260713-night-only-shading&location=${encodeURIComponent(location.key)}`;
+  return `./map.html?v=20260723-daylight-tide-table&location=${encodeURIComponent(location.key)}`;
 }
 
 function referenceStationLabel(profile) {
@@ -1577,10 +1601,10 @@ function renderLowTides() {
     return `
       <tr class="${rowClass}">
         <td>${escapeHtml(formatDate(row.date, state.profile.timezone, getLocale()))}</td>
-        <td class="high-tide-cell">${formatTidePeriodCell(row.highMorning)}</td>
-        <td class="high-tide-cell">${formatTidePeriodCell(row.highAfternoon)}</td>
-        <td class="low-tide-cell">${formatTidePeriodCell(row.lowMorning)}</td>
-        <td class="low-tide-cell">${formatTidePeriodCell(row.lowAfternoon)}</td>
+        <td class="high-tide-cell">${formatTidePeriodCell(row.highMorning, "high")}</td>
+        <td class="high-tide-cell">${formatTidePeriodCell(row.highAfternoon, "high")}</td>
+        <td class="low-tide-cell">${formatTidePeriodCell(row.lowMorning, "low")}</td>
+        <td class="low-tide-cell">${formatTidePeriodCell(row.lowAfternoon, "low")}</td>
         <td>${status}</td>
       </tr>
     `;
@@ -1626,14 +1650,37 @@ function isMorningTideEvent(extreme) {
   return zonedParts(extreme.date, state.profile.timezone).hour < 12;
 }
 
-function formatTidePeriodCell(extremes) {
-  if (!extremes?.length) return `<span class="muted-cell">--</span>`;
-  return extremes.map(formatTideTableCell).join("<br>");
+function isDaylightTideEvent(extreme) {
+  if (!extreme?.date) return false;
+
+  const coordinates = solarCoordinatesForSelection();
+  const zone = state.profile.timezone;
+  const dateKey = localDateKey(extreme.date, zone);
+  const solar = coordinates
+    ? solarTimes(extreme.date, coordinates.lat, coordinates.lon, zone)
+    : null;
+  const fallback = fallbackSolarTimes(dateKey, zone);
+  const sunrise = solar?.sunrise || fallback.sunrise;
+  const sunset = solar?.sunset || fallback.sunset;
+
+  return extreme.date >= sunrise && extreme.date <= sunset;
 }
 
-function formatTideTableCell(extreme) {
+function formatTidePeriodCell(extremes, tideType) {
+  if (!extremes?.length) return `<span class="muted-cell">--</span>`;
+  return extremes.map((extreme) => formatTideTableCell(extreme, tideType)).join("<br>");
+}
+
+function formatTideTableCell(extreme, tideType) {
   if (!extreme) return `<span class="muted-cell">--</span>`;
-  return `<span class="tide-event-cell"><span class="tide-event-time">${escapeHtml(formatTime(extreme.date, state.profile.timezone, getLocale()))}</span> <span class="tide-event-height">(${escapeHtml(formatCompactMetres(extreme.heightM))})</span></span>`;
+
+  const classes = ["tide-event-cell"];
+  if (tideType === "high") classes.push("high-tide-event");
+  if (tideType === "low") {
+    classes.push("low-tide-event", isDaylightTideEvent(extreme) ? "low-tide-daylight" : "low-tide-night");
+  }
+
+  return `<span class="${classes.join(" ")}"><span class="tide-event-time">${escapeHtml(formatTime(extreme.date, state.profile.timezone, getLocale()))}</span> <span class="tide-event-height">(${escapeHtml(formatCompactMetres(extreme.heightM))})</span></span>`;
 }
 
 function formatCompactMetres(value) {

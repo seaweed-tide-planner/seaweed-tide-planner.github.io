@@ -1028,29 +1028,38 @@ textarea {
 
 .low-tide-table .high-tide-cell {
   color: var(--warn);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .low-tide-table .high-tide-cell .tide-event-height {
   color: var(--warn);
 }
 
-.low-tide-table tr.harvest-row td {
-  color: var(--harvest);
-  font-weight: 600;
-}
-
 .low-tide-table tr.harvest-row .high-tide-cell {
   color: var(--warn);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .low-tide-table tr.harvest-row .high-tide-cell .tide-event-height {
   color: var(--warn);
 }
 
-.low-tide-table tr.harvest-row .tide-event-height {
+.low-tide-table .high-tide-event {
+  color: var(--warn);
+  font-weight: 400;
+}
+
+.low-tide-table .low-tide-cell .low-tide-event {
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.low-tide-table .low-tide-cell .low-tide-daylight {
   color: var(--harvest);
+}
+
+.low-tide-table .low-tide-cell .low-tide-event .tide-event-height {
+  color: currentColor;
 }
 
 .harvest-text,
@@ -2446,6 +2455,11 @@ button:disabled {
   background: #16a34a;
 }
 
+.map-marker-sample.lodge,
+.map-marker-icon.lodge {
+  background: #b45309;
+}
+
 .map-marker-sample.tide-reference,
 .map-marker-icon.tide-reference {
   background: #0ea5e9;
@@ -2572,6 +2586,10 @@ button:disabled {
 
 .map-location-row.farm td:first-child {
   border-left: 3px solid #16a34a;
+}
+
+.map-location-row.lodge td:first-child {
+  border-left: 3px solid #b45309;
 }
 
 .map-location-row.tide-reference td:first-child {
@@ -3300,10 +3318,6 @@ main.admin-layout + .marine-disclaimer-footer {
     padding: 6px 2px;
     text-align: center;
     vertical-align: middle;
-  }
-
-  .low-tide-table tr.harvest-row td {
-    font-weight: 700;
   }
 
   .tide-event-cell {

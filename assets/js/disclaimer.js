@@ -1,4 +1,4 @@
-import { t } from "./language.js?v=20260713-night-only-shading";
+import { t } from "./language.js?v=20260723-daylight-tide-table";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
 

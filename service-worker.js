@@ -1,6 +1,6 @@
-const CACHE_VERSION = "20260713-night-only-shading";
+const CACHE_VERSION = "20260723-daylight-tide-table";
 const SHELL_CACHE = `seaweed-tide-planner-shell-${CACHE_VERSION}`;
-const DATA_CACHE = "seaweed-tide-planner-data-v1";
+const DATA_CACHE = "seaweed-tide-planner-data-v2";
 const MAP_TILE_CACHE = "seaweed-tide-planner-map-tiles-v1";
 
 const SHELL_ASSETS = [
@@ -78,7 +78,9 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isSupabaseReadRequest(url)) {
-    event.respondWith(networkFirstData(request));
+    const refresh = refreshDataCache(request);
+    event.waitUntil(refresh.catch(() => undefined));
+    event.respondWith(cachedDataFirst(request, refresh));
     return;
   }
 
@@ -150,18 +152,23 @@ async function staleWhileRevalidate(request) {
   return cached || networkFetch;
 }
 
-async function networkFirstData(request) {
+async function refreshDataCache(request) {
   const cache = await caches.open(DATA_CACHE);
+  const response = await fetch(request);
+  if (response.ok) {
+    await cache.put(request, response.clone());
+  }
+  return response;
+}
+
+async function cachedDataFirst(request, refresh) {
+  const cache = await caches.open(DATA_CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
 
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      cache.put(request, response.clone());
-    }
-    return response;
+    return await refresh;
   } catch {
-    const cached = await cache.match(request);
-    if (cached) return cached;
     return new Response("[]", {
       status: 200,
       headers: { "Content-Type": "application/json" }

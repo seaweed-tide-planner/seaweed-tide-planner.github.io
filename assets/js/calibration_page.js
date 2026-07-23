@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js";
+import { APP_CONFIG } from "./config.js?v=20260718-supabase-fast";
 
 const AUTH_SESSION_KEY = "seaweed_tide_planner:admin_auth_session";
 const TABLES = {
@@ -339,6 +339,10 @@ async function supabasePatch(table, id, payload) {
 
 async function supabaseRequest(path, options = {}) {
   if (options.requireAuth) requireSignedIn();
+  const method = options.method || "GET";
+  const timeoutMs = method === "GET" ? 12000 : 45000;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   const token = state.authSession?.access_token || APP_CONFIG.supabase.anonKey;
   const headers = {
     apikey: APP_CONFIG.supabase.anonKey,
@@ -347,17 +351,27 @@ async function supabaseRequest(path, options = {}) {
   if (options.body) headers["Content-Type"] = "application/json";
   if (options.prefer) headers.Prefer = options.prefer;
 
-  const response = await fetch(`${APP_CONFIG.supabase.restUrl}/${path}`, {
-    method: options.method || "GET",
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
+  try {
+    const response = await fetch(`${APP_CONFIG.supabase.restUrl}/${path}`, {
+      method,
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal
+    });
 
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}${await responseDetail(response)}`);
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}${await responseDetail(response)}`);
+    }
+    if (response.status === 204) return [];
+    return response.json();
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Supabase request timed out after ${Math.round(timeoutMs / 1000)} seconds. Check the connection and try again.`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  if (response.status === 204) return [];
-  return response.json();
 }
 
 function updateAuthUi() {

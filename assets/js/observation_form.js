@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js";
+import { APP_CONFIG } from "./config.js?v=20260718-supabase-fast";
 
 const TABLES = {
   locations: "farm_locations",
@@ -207,7 +207,7 @@ async function uploadPhotos(observationId, files) {
   const paths = [];
   for (const file of files) {
     const path = `${observationId}/${Date.now()}-${safeFileName(file.name)}`;
-    const response = await fetch(`${APP_CONFIG.supabase.url}/storage/v1/object/${PHOTO_BUCKET}/${encodeURIComponentPath(path)}`, {
+    const response = await fetchWithTimeout(`${APP_CONFIG.supabase.url}/storage/v1/object/${PHOTO_BUCKET}/${encodeURIComponentPath(path)}`, {
       method: "POST",
       headers: {
         apikey: APP_CONFIG.supabase.anonKey,
@@ -216,7 +216,7 @@ async function uploadPhotos(observationId, files) {
         "x-upsert": "false"
       },
       body: file
-    });
+    }, 60000);
 
     if (!response.ok) {
       throw new Error(`${response.status} ${response.statusText}${await responseDetail(response)}`);
@@ -240,6 +240,8 @@ async function supabaseInsert(table, payload) {
 }
 
 async function supabaseRequest(path, options = {}) {
+  const method = options.method || "GET";
+  const timeoutMs = method === "GET" ? 12000 : 45000;
   const headers = {
     apikey: APP_CONFIG.supabase.anonKey,
     Authorization: `Bearer ${APP_CONFIG.supabase.anonKey}`
@@ -247,17 +249,32 @@ async function supabaseRequest(path, options = {}) {
   if (options.body) headers["Content-Type"] = "application/json";
   if (options.prefer) headers.Prefer = options.prefer;
 
-  const response = await fetch(`${APP_CONFIG.supabase.restUrl}/${path}`, {
-    method: options.method || "GET",
+  const response = await fetchWithTimeout(`${APP_CONFIG.supabase.restUrl}/${path}`, {
+    method,
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined
-  });
+  }, timeoutMs);
 
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}${await responseDetail(response)}`);
   }
   if (response.status === 204) return [];
   return response.json();
+}
+
+async function fetchWithTimeout(url, init, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Supabase request timed out after ${Math.round(timeoutMs / 1000)} seconds. Check the connection and try again.`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function selectedLocation() {

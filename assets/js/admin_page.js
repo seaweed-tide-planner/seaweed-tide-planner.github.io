@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js";
+import { APP_CONFIG } from "./config.js?v=20260718-supabase-fast";
 
 const TABLES = {
   locations: "farm_locations",
@@ -1599,8 +1599,10 @@ async function supabasePatchBy(table, field, value, payload) {
 async function supabaseRequest(path, options = {}) {
   if (options.requireAuth) requireSignedIn();
 
+  const method = options.method || "GET";
+  const timeoutMs = options.timeoutMs || (method === "GET" ? 12000 : 45000);
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 18000);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   const token = state.authSession?.access_token || APP_CONFIG.supabase.anonKey;
   const headers = {
     apikey: APP_CONFIG.supabase.anonKey,
@@ -1612,7 +1614,7 @@ async function supabaseRequest(path, options = {}) {
 
   try {
     const response = await fetch(`${APP_CONFIG.supabase.restUrl}/${path}`, {
-      method: options.method || "GET",
+      method,
       headers,
       body: options.body ? JSON.stringify(options.body) : undefined,
       signal: controller.signal
@@ -1627,7 +1629,7 @@ async function supabaseRequest(path, options = {}) {
     return text ? JSON.parse(text) : [];
   } catch (error) {
     if (error.name === "AbortError") {
-      throw new Error("Supabase request timed out. Reload the page or check the connection.");
+      throw new Error(`Supabase request timed out after ${Math.round(timeoutMs / 1000)} seconds. Reload the page or check the connection.`);
     }
     throw error;
   } finally {

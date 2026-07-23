@@ -15,6 +15,9 @@ export const APP_CONFIG = {
     enabled: false,
     publicReadsEnabled: true
   },
+  weatherAlerts: {
+    edgeRefreshEnabled: false
+  },
   defaultLocationKey: "kenya-coast",
   defaultLocale: "en-GB",
   storageKeys: {

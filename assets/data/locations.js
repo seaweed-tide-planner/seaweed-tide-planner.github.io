@@ -411,6 +411,25 @@ export const TIDE_LOCATIONS = [
     notes: "Farm community location generated from monthly seaweed collection records."
   },
   {
+    key: "mwazaro-beach-lodge",
+    name: "Mwazaro Beach Lodge",
+    shortName: "Mwazaro Lodge",
+    region: "Kwale County",
+    country: "Kenya",
+    timezone: "Africa/Nairobi",
+    tideProfileKey: "kenya_mombasa_reference",
+    defaultTideDatasetKey: "kmfri_2026_mombasa",
+    defaultHarvestThresholdM: 0.4,
+    locationType: "lodge",
+    gps: {
+      lat: -4.597372,
+      lon: 39.392824
+    },
+    gpsLabel: "Public listing coordinates for Mwazaro Beach Lodge; verify locally before field use",
+    status: "active",
+    notes: "Lodge/tide-monitoring location near Shimoni. Tide timing currently follows the Mombasa/Kenya coast reference dataset."
+  },
+  {
     key: "shimoni",
     name: "Shimoni Farm Area",
     shortName: "Shimoni",

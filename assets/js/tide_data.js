@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js?v=20260612-location-identifiers";
+import { APP_CONFIG } from "./config.js?v=20260723-daylight-tide-table";
 import { TIDE_LOCATIONS } from "../data/locations.js";
 import { TIDE_PROFILES } from "../data/tide_profiles.js";
 
@@ -23,6 +23,8 @@ const TIDE_REFERENCE_REGION_BY_LOCATION = {
 };
 const PUBLIC_FARM_LOCATION_CACHE_KEY = "seaweed_tide_planner:public_farm_locations:v1";
 const PUBLIC_TIDE_REFERENCE_CACHE_KEY = "seaweed_tide_planner:public_tide_references:v1";
+const SUPABASE_REQUEST_TIMEOUT_MS = 12000;
+const SUPABASE_PAGE_CONCURRENCY = 2;
 
 export function getLocations() {
   return TIDE_LOCATIONS;
@@ -56,15 +58,20 @@ export async function fetchSupabaseTablePaged(tableName, query = "select=*", pag
     throw new Error("Supabase reads are configured but not enabled yet.");
   }
 
-  const rows = [];
-  let start = 0;
+  const firstPage = await fetchSupabaseJson(tableName, `${query}&limit=${pageSize}&offset=0`);
+  const rows = [...firstPage];
+  if (firstPage.length < pageSize) return rows;
 
+  let start = pageSize;
   while (true) {
-    const page = await fetchSupabaseJson(tableName, `${query}&limit=${pageSize}&offset=${start}`);
-    rows.push(...page);
+    const pages = await Promise.all(Array.from({ length: SUPABASE_PAGE_CONCURRENCY }, (_, index) => {
+      const offset = start + index * pageSize;
+      return fetchSupabaseJson(tableName, `${query}&limit=${pageSize}&offset=${offset}`);
+    }));
 
-    if (page.length < pageSize) break;
-    start += pageSize;
+    pages.forEach((page) => rows.push(...page));
+    if (pages.some((page) => page.length < pageSize)) break;
+    start += pageSize * SUPABASE_PAGE_CONCURRENCY;
   }
 
   return rows;
@@ -136,13 +143,26 @@ function resolveDatasetFilter(datasetRef, options = {}) {
 
 async function fetchSupabaseJson(tableName, query, extraHeaders = {}) {
   const path = `${APP_CONFIG.supabase.restUrl}/${encodeURIComponent(tableName)}?${query}`;
-  const response = await fetch(path, {
-    headers: {
-      apikey: APP_CONFIG.supabase.anonKey,
-      Authorization: `Bearer ${APP_CONFIG.supabase.anonKey}`,
-      ...extraHeaders
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SUPABASE_REQUEST_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(path, {
+      headers: {
+        apikey: APP_CONFIG.supabase.anonKey,
+        Authorization: `Bearer ${APP_CONFIG.supabase.anonKey}`,
+        ...extraHeaders
+      },
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Supabase request timed out after ${Math.round(SUPABASE_REQUEST_TIMEOUT_MS / 1000)} seconds.`);
     }
-  });
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     throw new Error(`Supabase request failed: ${response.status} ${response.statusText}`);
@@ -285,6 +305,7 @@ function normalizeSupabaseFarmLocation(row) {
     defaultTideDatasetId: datasetId,
     defaultTideDatasetKey: datasetKey,
     defaultHarvestThresholdM: Number(row.default_harvest_threshold_m ?? 0.7),
+    locationType: inferFarmLocationType(row),
     gps: Number.isFinite(latitude) && Number.isFinite(longitude)
       ? { lat: latitude, lon: longitude }
       : null,
@@ -294,6 +315,18 @@ function normalizeSupabaseFarmLocation(row) {
     active: row.active,
     notes: row.notes || "Farm location loaded from Supabase."
   };
+}
+
+function inferFarmLocationType(row) {
+  const text = [
+    row.farm_location_key,
+    row.farm_name,
+    row.short_name,
+    row.notes
+  ].join(" ").toLowerCase();
+
+  if (text.includes("lodge") || text.includes("hotel") || text.includes("resort")) return "lodge";
+  return "farm";
 }
 
 function applyLocationUrlKeys(locations) {
