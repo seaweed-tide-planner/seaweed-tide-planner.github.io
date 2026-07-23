@@ -7,7 +7,7 @@ import {
   localDateKey,
   startOfMonthKey
 } from "./tide_format.js";
-import { getLocale, t } from "./language.js?v=20260723-daylight-tide-table";
+import { getLocale, t } from "./language.js?v=20260723-sunrise-grace-low-tides";
 
 const COLORS = {
   line: "#3b82f6",

@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js?v=20260723-daylight-tide-table";
+import { APP_CONFIG } from "./config.js?v=20260723-sunrise-grace-low-tides";
 import {
   getDataStatus,
   getLocations,
@@ -6,7 +6,7 @@ import {
   loadPublicFarmLocations,
   loadPublicTideDatasetBundle,
   loadPublicTideReferences
-} from "./tide_data.js?v=20260723-daylight-tide-table";
+} from "./tide_data.js?v=20260723-sunrise-grace-low-tides";
 import {
   getFarmLocationOfflineBundle,
   isOfflineStorageSupported,
@@ -41,13 +41,13 @@ import {
   startOfMonthKey,
   weekdayIndex
 } from "./tide_format.js";
-import { renderTideChart } from "./tide_charts.js?v=20260723-daylight-tide-table";
+import { renderTideChart } from "./tide_charts.js?v=20260723-sunrise-grace-low-tides";
 import {
   getLocale,
   t,
   translateDataText,
   translateStatusLabel
-} from "./language.js?v=20260723-daylight-tide-table";
+} from "./language.js?v=20260723-sunrise-grace-low-tides";
 
 const state = {
   location: null,
@@ -75,6 +75,7 @@ let tideReferenceLocations = [];
 let tideLocations = farmLocations;
 const TIDE_PROFILES = getProfiles();
 const FORECAST_AUTO_REFRESH_MS = 5 * 60 * 1000;
+const LOW_TIDE_SUNRISE_GRACE_MS = 60 * 60 * 1000;
 const LEGACY_LOCATION_KEY_ALIASES = {
   "kenya-coast-reference": "kenya-coast",
   "funzi-placeholder": "funzi",
@@ -770,7 +771,7 @@ function locationSymbol(location) {
 }
 
 function mapUrl(location) {
-  return `./map.html?v=20260723-daylight-tide-table&location=${encodeURIComponent(location.key)}`;
+  return `./map.html?v=20260723-sunrise-grace-low-tides&location=${encodeURIComponent(location.key)}`;
 }
 
 function referenceStationLabel(profile) {
@@ -1662,8 +1663,9 @@ function isDaylightTideEvent(extreme) {
   const fallback = fallbackSolarTimes(dateKey, zone);
   const sunrise = solar?.sunrise || fallback.sunrise;
   const sunset = solar?.sunset || fallback.sunset;
+  const sunriseGraceStart = new Date(sunrise.getTime() - LOW_TIDE_SUNRISE_GRACE_MS);
 
-  return extreme.date >= sunrise && extreme.date <= sunset;
+  return extreme.date >= sunriseGraceStart && extreme.date <= sunset;
 }
 
 function formatTidePeriodCell(extremes, tideType) {

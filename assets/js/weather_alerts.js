@@ -1,5 +1,5 @@
-import { APP_CONFIG } from "./config.js?v=20260723-daylight-tide-table";
-import { getLocale, t } from "./language.js?v=20260723-daylight-tide-table";
+import { APP_CONFIG } from "./config.js?v=20260723-sunrise-grace-low-tides";
+import { getLocale, t } from "./language.js?v=20260723-sunrise-grace-low-tides";
 
 const SOURCE_KEY = "kmd_cap";
 const KMD_WARNINGS_URL = "https://meteo.go.ke/weather-warnings/";

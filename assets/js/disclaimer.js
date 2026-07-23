@@ -1,4 +1,4 @@
-import { t } from "./language.js?v=20260723-daylight-tide-table";
+import { t } from "./language.js?v=20260723-sunrise-grace-low-tides";
 
 const DISCLAIMER_SESSION_KEY = "seaweedTidePlannerMarineDisclaimerAccepted";
 
